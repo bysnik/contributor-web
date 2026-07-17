@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   LayoutDashboard, LifeBuoy, BookOpen, Server, CreditCard,
   AlertCircle, Clock, Plus, Search, Paperclip, Send,
-  ChevronRight, ChevronLeft, Cpu, HardDrive, Network,
-  Activity, FileText, Download, Shield, User, Settings,
+  ChevronRight, ChevronLeft, HardDrive, Network,
+  Activity, FileText, Download, Shield, Settings,
   Building2, X, Bell, Eye, RefreshCw, Check, Zap,
+  ArrowLeft, Maximize2, Box, Layers, GitBranch,
+  ChevronDown, Database, Globe, Router, TerminalSquare,
 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
@@ -20,6 +22,17 @@ const TICKETS = [
   { id: "CHG-0089", title: "Плановое обновление антивируса на серверах", priority: "low", status: "approved", category: "ПО", created: "10.07.2024 09:00", assignee: "Иванов И.А.", slaLeft: 0, comments: 4 },
 ];
 
+const CHAT_MESSAGES = [
+  { id: 1, from: "client", author: "Петров А.С.", avatar: "ПА", time: "09:12", text: "Доброе утро! С сегодняшнего утра несколько сотрудников бухгалтерии (Комнаты 201, 203) не могут зайти в 1С. Ошибка: «Сервер баз данных недоступен». Обычные сайты открываются нормально." },
+  { id: 2, from: "engineer", author: "Иванов И.А.", avatar: "ИИ", time: "09:18", text: "Принял в работу. Первым делом проверю состояние сервера srv-db-01 и сетевую доступность. Уточните — это произошло внезапно или после каких-то изменений вчера вечером?" },
+  { id: 3, from: "client", author: "Петров А.С.", avatar: "ПА", time: "09:21", text: "Вчера вечером никаких работ не было запланировано, насколько я знаю. Это случилось с утра — примерно с 08:45." },
+  { id: 4, from: "engineer", author: "Иванов И.А.", avatar: "ИИ", time: "09:35", text: "Нашёл причину. На srv-db-01 закончилось свободное место на разделе /var/lib/postgresql (99.8% заполнен). PostgreSQL перешёл в read-only и не принимает новые подключения. Очищаю WAL-архивы, которые не были удалены автоматически. Займёт ~10 минут." },
+  { id: 5, from: "system", author: "Система", avatar: "SYS", time: "09:41", text: "К тикету прикреплён файл: disk_cleanup_log_2024-07-16.txt (12 КБ)" },
+  { id: 6, from: "engineer", author: "Иванов И.А.", avatar: "ИИ", time: "09:48", text: "Готово. Диск разгружен до 71%. PostgreSQL перезапущен и принимает подключения. Проверьте 1С на одной из рабочих станций, пожалуйста." },
+  { id: 7, from: "client", author: "Петров А.С.", avatar: "ПА", time: "09:52", text: "Проверили — 1С открывается! Спасибо за оперативность. Нужно ли что-то делать, чтобы это не повторилось?" },
+  { id: 8, from: "engineer", author: "Иванов И.А.", avatar: "ИИ", time: "09:55", text: "Да, настрою алерт в Zabbix на заполнение диска >85% и увеличу лимит хранения WAL-архивов. Также рекомендую расширить раздел с 120 ГБ до 200 ГБ — это займёт плановое окно. Оформлю отдельный Change Request." },
+];
+
 const WORK_LOG = [
   { id: 1, date: "16.07.2024", time: "14:22", engineer: "Иванов И.А.", title: "Обновление ядра Linux на сервере srv-db-01", body: "Обновлено ядро с 5.15.0 до 6.1.86-LTS. Работы выполнены в сервисное окно 03:00–04:00. Все сервисы запущены в штатном режиме, проверена доступность БД PostgreSQL.", ticket: "INC-2815", device: "srv-db-01", attachments: ["kernel_update_log.txt"], confirmed: true },
   { id: 2, date: "15.07.2024", time: "11:05", engineer: "Сидоров С.К.", title: "Замена диска в RAID-массиве NAS Synology", body: "Выполнена плановая замена накопителя Seagate ST4000NM001A (S/N: ZFN2K3QE). Массив перестроен, статус HEALTHY. Рекомендуем проверить архив резервных копий.", ticket: null, device: "nas-01", attachments: [], confirmed: false },
@@ -33,6 +46,80 @@ const DEVICES = [
   { id: "sw-core-01", name: "sw-core-01", type: "switch", model: "Cisco Catalyst 9300-48P", serial: "FCW2247L001", location: "Главный офис", rack: "Rack-A", unit: "U1", ip: "10.0.0.1", os: "IOS XE 17.9.4a", status: "ok", cpu: 8, ram: null, disk: null, uptime: "203 дня", warranty: "01.06.2028", vms: [], cpuHistory: [5,8,6,9,7,8,10,8,7,9,8,8] },
   { id: "fw-01", name: "fw-01", type: "firewall", model: "Fortinet FortiGate 100F", serial: "FGT1H3K18034567", location: "Главный офис", rack: "Rack-A", unit: "U2", ip: "10.0.0.254", os: "FortiOS 7.4.3", status: "warning", cpu: 71, ram: 58, disk: null, uptime: "47 дней", warranty: "30.09.2026", vms: [], cpuHistory: [45,55,60,71,68,72,71,65,70,71,73,71] },
   { id: "nas-01", name: "nas-01", type: "storage", model: "Synology RS3621xs+", serial: "2250NNN000111", location: "Серверная №2", rack: "Rack-B", unit: "U4", ip: "10.0.1.20", os: "DSM 7.2.1", status: "ok", cpu: 8, ram: null, disk: 44, uptime: "180 дней", warranty: "12.05.2027", vms: [], cpuHistory: [5,6,8,7,9,8,7,6,8,9,8,7] },
+];
+
+const HYPERVISORS = [
+  {
+    id: "pve-01", name: "pve-01", model: "Dell PowerEdge R740", ip: "10.0.1.10", version: "Proxmox VE 8.2.2", cpu: 34, ram: 67, disk: 52, status: "ok",
+    vms: [
+      { id: "vm-100", name: "vm-1c-prod", type: "vm", status: "running", cpu: 18, ram: 52, disk: 38, cores: 8, mem: "16 GB", os: "Windows Server 2022" },
+      { id: "vm-101", name: "vm-postgres-01", type: "vm", status: "running", cpu: 12, ram: 71, disk: 44, cores: 4, mem: "32 GB", os: "Ubuntu 22.04" },
+      { id: "lxc-200", name: "lxc-gitlab", type: "lxc", status: "running", cpu: 6, ram: 34, disk: 22, cores: 2, mem: "4 GB", os: "Debian 12" },
+      { id: "lxc-201", name: "lxc-redis", type: "lxc", status: "stopped", cpu: 0, ram: 0, disk: 2, cores: 1, mem: "1 GB", os: "Alpine 3.19" },
+    ],
+  },
+  {
+    id: "pve-02", name: "pve-02", model: "Dell PowerEdge R640", ip: "10.0.1.11", version: "Proxmox VE 8.2.2", cpu: 12, ram: 45, disk: 38, status: "ok",
+    vms: [
+      { id: "vm-102", name: "vm-nginx-01", type: "vm", status: "running", cpu: 4, ram: 28, disk: 18, cores: 2, mem: "4 GB", os: "Rocky Linux 9.3" },
+      { id: "vm-103", name: "vm-gitlab-runner", type: "vm", status: "running", cpu: 8, ram: 55, disk: 30, cores: 4, mem: "8 GB", os: "Ubuntu 22.04" },
+      { id: "lxc-202", name: "lxc-monitoring", type: "lxc", status: "running", cpu: 3, ram: 22, disk: 8, cores: 1, mem: "2 GB", os: "Debian 12" },
+    ],
+  },
+];
+
+const DOCKER_CONTAINERS = [
+  { id: "c1", name: "nginx-proxy", image: "nginx:1.25-alpine", host: "pve-02 / vm-nginx-01", status: "running", cpu: 1.2, ram: 128, ports: "80:80, 443:443", uptime: "14д 6ч", network: "proxy-net" },
+  { id: "c2", name: "gitlab-ce", image: "gitlab/gitlab-ce:16.11", host: "pve-01 / lxc-gitlab", status: "running", cpu: 8.4, ram: 3840, ports: "22:22, 8929:80", uptime: "7д 2ч", network: "gitlab-net" },
+  { id: "c3", name: "postgres-15", image: "postgres:15.6-alpine", host: "pve-01 / vm-postgres-01", status: "running", cpu: 4.1, ram: 2048, ports: "5432:5432", uptime: "47д", network: "db-net" },
+  { id: "c4", name: "redis-7", image: "redis:7.2-alpine", host: "pve-01 / lxc-redis", status: "stopped", cpu: 0, ram: 0, ports: "6379:6379", uptime: "—", network: "db-net" },
+  { id: "c5", name: "zabbix-agent", image: "zabbix/zabbix-agent2:6.4", host: "pve-02 / lxc-monitoring", status: "running", cpu: 0.3, ram: 48, ports: "10050:10050", uptime: "31д", network: "monitor-net" },
+  { id: "c6", name: "gitlab-runner", image: "gitlab/gitlab-runner:alpine", host: "pve-02 / vm-gitlab-runner", status: "running", cpu: 12.7, ram: 512, ports: "—", uptime: "3д 14ч", network: "gitlab-net" },
+];
+
+const K8S_NODES = [
+  {
+    id: "k8s-node-01", name: "k8s-node-01", role: "master", ip: "10.0.2.10", status: "ready", cpu: 22, ram: 44,
+    pods: [
+      { name: "kube-apiserver", namespace: "kube-system", status: "running", image: "registry.k8s.io/kube-apiserver:v1.29" },
+      { name: "etcd", namespace: "kube-system", status: "running", image: "registry.k8s.io/etcd:3.5.12" },
+      { name: "coredns-5dd5756b68", namespace: "kube-system", status: "running", image: "registry.k8s.io/coredns:v1.11.1" },
+    ],
+  },
+  {
+    id: "k8s-node-02", name: "k8s-node-02", role: "worker", ip: "10.0.2.11", status: "ready", cpu: 48, ram: 61,
+    pods: [
+      { name: "app-backend-7c9d5f", namespace: "production", status: "running", image: "registry.local/app-backend:2.4.1" },
+      { name: "app-frontend-6b8c4d", namespace: "production", status: "running", image: "registry.local/app-frontend:1.9.3" },
+      { name: "postgres-exporter", namespace: "monitoring", status: "running", image: "prometheuscommunity/postgres-exporter:0.15" },
+    ],
+  },
+  {
+    id: "k8s-node-03", name: "k8s-node-03", role: "worker", ip: "10.0.2.12", status: "not_ready", cpu: 0, ram: 0,
+    pods: [],
+  },
+];
+
+const TOPOLOGY_NODES = [
+  { id: "internet", label: "Internet", type: "external", ip: "—", x: 400, y: 30 },
+  { id: "fw-01", label: "fw-01", type: "firewall", ip: "10.0.0.254", x: 400, y: 120 },
+  { id: "sw-core-01", label: "sw-core-01", type: "switch", ip: "10.0.0.1", x: 400, y: 220 },
+  { id: "sw-access-01", label: "sw-access-01", type: "switch", ip: "10.0.0.2", x: 160, y: 320 },
+  { id: "srv-db-01", label: "srv-db-01", type: "database", ip: "10.0.1.10", x: 340, y: 340 },
+  { id: "srv-app-01", label: "srv-app-01", type: "server", ip: "10.0.1.11", x: 520, y: 340 },
+  { id: "nas-01", label: "nas-01", type: "storage", ip: "10.0.1.20", x: 640, y: 240 },
+  { id: "workstations", label: "Workstations (×32)", type: "group", ip: "10.0.3.0/24", x: 120, y: 430 },
+];
+
+const TOPOLOGY_EDGES = [
+  { from: "internet", to: "fw-01", label: "WAN", bw: "100M", color: "#EF4444" },
+  { from: "fw-01", to: "sw-core-01", label: "10G", bw: "10G", color: "#F59E0B" },
+  { from: "sw-core-01", to: "sw-access-01", label: "1G", bw: "1G", color: "#4A6070" },
+  { from: "sw-core-01", to: "srv-db-01", label: "10G", bw: "10G", color: "#00D4A8" },
+  { from: "sw-core-01", to: "srv-app-01", label: "10G", bw: "10G", color: "#00D4A8" },
+  { from: "sw-core-01", to: "nas-01", label: "10G", bw: "10G", color: "#00D4A8" },
+  { from: "sw-access-01", to: "workstations", label: "1G", bw: "1G", color: "#4A6070" },
+  { from: "srv-db-01", to: "nas-01", label: "Backup", bw: "1G", color: "#8B5CF6" },
 ];
 
 const DOCUMENTS = [
@@ -88,10 +175,20 @@ const PRIORITY_CFG: Record<string, { label: string; color: string }> = {
 };
 
 const DEVICE_ICON: Record<string, React.ElementType> = {
-  server: Server,
-  switch: Network,
+  server: Globe,
+  switch: Router,
   firewall: Shield,
   storage: HardDrive,
+};
+
+const TOPO_NODE_CFG: Record<string, { color: string; Icon: React.ElementType; label: string }> = {
+  external: { color: "#4A6070", Icon: Globe, label: "Внешняя сеть" },
+  firewall: { color: "#EF4444", Icon: Shield, label: "Межсетевой экран" },
+  switch: { color: "#F59E0B", Icon: Router, label: "Коммутатор" },
+  database: { color: "#3B82F6", Icon: Database, label: "БД-сервер" },
+  server: { color: "#8B5CF6", Icon: Globe, label: "Сервер приложений" },
+  storage: { color: "#6B7280", Icon: HardDrive, label: "Хранилище" },
+  group: { color: "#4A6070", Icon: Box, label: "Группа устройств" },
 };
 
 // ─── Utility components ───────────────────────────────────────────────────────
@@ -192,6 +289,18 @@ function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>{children}</div>;
 }
 
+function InfraSubTab({ tabs, active, onChange }: { tabs: [string, string][]; active: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex gap-0 border-b border-border mb-4">
+      {tabs.map(([v, l]) => (
+        <button key={v} onClick={() => onChange(v)} className="px-4 py-2 text-xs -mb-px border-b-2 transition-colors" style={{ borderColor: active === v ? "#00D4A8" : "transparent", color: active === v ? "#00D4A8" : "#4A6070", ...MONO }}>
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 function Dashboard() {
@@ -204,7 +313,6 @@ function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* KPI row */}
       <div className="grid grid-cols-4 gap-3">
         <Card className="p-4">
           <Label>Состояние инфраструктуры</Label>
@@ -269,12 +377,11 @@ function Dashboard() {
         </Card>
       </div>
 
-      {/* Device sparklines */}
       <div>
         <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>Мониторинг устройств</div>
         <div className="grid grid-cols-5 gap-3">
           {DEVICES.map(device => {
-            const Icon = DEVICE_ICON[device.type] ?? Server;
+            const Icon = DEVICE_ICON[device.type] ?? Globe;
             const sc = STATUS_CFG[device.status];
             const sparkColor = (device.cpu ?? 0) > 70 ? "#F59E0B" : "#00D4A8";
             return (
@@ -299,7 +406,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Tickets + log preview */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>Последние обращения</div>
@@ -341,9 +447,146 @@ function Dashboard() {
   );
 }
 
+// ─── Full Chat View ───────────────────────────────────────────────────────────
+
+function FullChat({ ticketId, onBack }: { ticketId: string; onBack: () => void }) {
+  const ticket = TICKETS.find(t => t.id === ticketId);
+  const [input, setInput] = useState("");
+  const [typing, setTyping] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  const handleSend = () => {
+    if (!input.trim()) return;
+    setInput("");
+    setTyping(true);
+    setTimeout(() => setTyping(false), 2200);
+  };
+
+  const avatarColor = (from: string) => {
+    if (from === "engineer") return { bg: "#00D4A818", color: "#00D4A8" };
+    if (from === "system") return { bg: "#38BDF820", color: "#38BDF8" };
+    return { bg: "#8B5CF620", color: "#8B5CF6" };
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-6 py-3 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.065)" }}>
+        <button onClick={onBack} className="flex items-center gap-1.5 text-xs transition-colors hover:text-foreground" style={{ color: "#4A6070" }}>
+          <ArrowLeft size={13} />
+          К тикету
+        </button>
+        <div className="w-px h-4 bg-border" />
+        {ticket && (
+          <>
+            <span className="text-xs font-semibold" style={{ ...MONO, color: "#00D4A8" }}>{ticket.id}</span>
+            <span className="text-xs text-foreground truncate flex-1">{ticket.title}</span>
+            <TicketBadge status={ticket.status} />
+            {ticket.slaLeft > 0 && <SLATimer minutes={ticket.slaLeft} />}
+          </>
+        )}
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+        {CHAT_MESSAGES.map(msg => {
+          const ac = avatarColor(msg.from);
+          const isClient = msg.from === "client";
+          const isSystem = msg.from === "system";
+
+          if (isSystem) {
+            return (
+              <div key={msg.id} className="flex justify-center">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded text-xs" style={{ ...MONO, backgroundColor: "#38BDF810", color: "#38BDF8", border: "1px solid #38BDF820" }}>
+                  <Paperclip size={10} />
+                  {msg.text}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={msg.id} className={`flex gap-3 ${isClient ? "flex-row-reverse" : ""}`}>
+              <div className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: ac.bg, color: ac.color }}>
+                {msg.avatar}
+              </div>
+              <div className={`max-w-xl ${isClient ? "items-end" : "items-start"} flex flex-col gap-1`}>
+                <div className="flex items-center gap-2" style={{ flexDirection: isClient ? "row-reverse" : "row" }}>
+                  <span className="text-xs font-medium text-foreground">{msg.author}</span>
+                  <span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{msg.time}</span>
+                </div>
+                <div
+                  className="px-4 py-2.5 rounded text-sm leading-relaxed"
+                  style={{
+                    backgroundColor: isClient ? "#00D4A812" : "#111C24",
+                    border: `1px solid ${isClient ? "#00D4A830" : "rgba(255,255,255,0.065)"}`,
+                    color: "#C4D2DC",
+                  }}
+                >
+                  {msg.text}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {typing && (
+          <div className="flex gap-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: "#00D4A818", color: "#00D4A8" }}>
+              ИИ
+            </div>
+            <div className="px-4 py-3 rounded flex items-center gap-1.5" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)" }}>
+              {[0, 1, 2].map(i => (
+                <span key={i} className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: "#00D4A8", animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+              ))}
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.065)" }}>
+        <div className="flex gap-2 items-end">
+          <div className="flex-1 rounded overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.065)", backgroundColor: "#0C1117" }}>
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              rows={3}
+              placeholder="Введите сообщение... (Enter — отправить, Shift+Enter — новая строка)"
+              className="w-full px-4 py-3 text-sm outline-none resize-none"
+              style={{ backgroundColor: "transparent", color: "#C4D2DC", fontFamily: "inherit" }}
+            />
+            <div className="flex items-center gap-2 px-3 pb-2">
+              <button className="text-muted-foreground hover:text-foreground transition-colors p-1"><Paperclip size={13} /></button>
+              <span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>Прикрепить файл</span>
+            </div>
+          </div>
+          <button
+            onClick={handleSend}
+            disabled={!input.trim()}
+            className="px-4 py-3 rounded flex items-center gap-2 text-sm font-medium flex-shrink-0 transition-all"
+            style={{ backgroundColor: input.trim() ? "#00D4A8" : "#00D4A820", color: input.trim() ? "#000" : "#4A6070" }}
+          >
+            <Send size={13} />
+            Отправить
+          </button>
+        </div>
+      </div>
+
+      <style>{`@keyframes pulse { 0%,100%{opacity:.3;transform:scale(.8)} 50%{opacity:1;transform:scale(1)} }`}</style>
+    </div>
+  );
+}
+
 // ─── Service Desk ─────────────────────────────────────────────────────────────
 
-function ServiceDesk() {
+function ServiceDesk({ onOpenChat }: { onOpenChat: (ticketId: string) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -430,7 +673,18 @@ function ServiceDesk() {
                 </div>
               )}
             </div>
-            <div className="text-xs mb-2" style={{ ...MONO, color: "#4A6070" }}>Комментарий</div>
+
+            {/* Open Full Chat button */}
+            <button
+              onClick={() => onOpenChat(sel.id)}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded text-xs font-medium mb-3 transition-colors"
+              style={{ backgroundColor: "#00D4A8", color: "#000" }}
+            >
+              <Maximize2 size={11} />
+              Открыть полный чат
+            </button>
+
+            <div className="text-xs mb-2" style={{ ...MONO, color: "#4A6070" }}>Быстрый комментарий</div>
             <textarea rows={3} placeholder="Добавить комментарий..." className="w-full rounded text-xs p-2 resize-none outline-none transition-colors" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC", fontFamily: "inherit" }} />
             <button className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 rounded text-xs font-medium" style={{ backgroundColor: "#00D4A815", color: "#00D4A8", border: "1px solid #00D4A830" }}>
               <Send size={10} />
@@ -602,151 +856,619 @@ function Docs() {
   );
 }
 
+// ─── Network Topology ─────────────────────────────────────────────────────────
+
+function NetworkTopology() {
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const onWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    setScale(s => Math.min(2.5, Math.max(0.4, s - e.deltaY * 0.001)));
+  }, []);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as Element).closest("[data-node]")) return;
+    setDragging(true);
+    setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
+  };
+
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragging) return;
+    setOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+  }, [dragging, dragStart]);
+
+  const onMouseUp = () => setDragging(false);
+
+  const bwStroke = (bw: string) => bw === "10G" ? 2.5 : bw === "1G" ? 1.5 : 1;
+
+  const selNode = selectedNode ? TOPOLOGY_NODES.find(n => n.id === selectedNode) : null;
+
+  return (
+    <div className="flex gap-4 h-full min-h-0">
+      {/* Graph canvas */}
+      <div className="flex-1 relative min-h-0 rounded overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.065)", backgroundColor: "#04070A", cursor: dragging ? "grabbing" : "grab" }}>
+        {/* Controls */}
+        <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
+          <button onClick={() => setScale(s => Math.min(2.5, s + 0.15))} className="w-7 h-7 rounded flex items-center justify-center text-sm transition-colors hover:border-[rgba(255,255,255,0.15)]" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }}>+</button>
+          <button onClick={() => setScale(s => Math.max(0.4, s - 0.15))} className="w-7 h-7 rounded flex items-center justify-center text-sm transition-colors hover:border-[rgba(255,255,255,0.15)]" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }}>−</button>
+          <button onClick={() => { setScale(1); setOffset({ x: 0, y: 0 }); }} className="w-7 h-7 rounded flex items-center justify-center transition-colors hover:border-[rgba(255,255,255,0.15)]" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#4A6070" }}>
+            <RefreshCw size={10} />
+          </button>
+        </div>
+
+        {/* Scale indicator */}
+        <div className="absolute top-3 right-3 z-10 text-xs px-2 py-1 rounded" style={{ ...MONO, backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#4A6070" }}>
+          {Math.round(scale * 100)}%
+        </div>
+
+        <svg
+          ref={svgRef}
+          width="100%"
+          height="100%"
+          onWheel={onWheel}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseUp}
+        >
+          <g transform={`translate(${offset.x},${offset.y}) scale(${scale})`} style={{ transformOrigin: "center" }}>
+            {/* Grid dots */}
+            <defs>
+              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <circle cx="20" cy="20" r="0.8" fill="rgba(255,255,255,0.03)" />
+              </pattern>
+            </defs>
+            <rect x="-1000" y="-1000" width="3000" height="3000" fill="url(#grid)" />
+
+            {/* Edges */}
+            {TOPOLOGY_EDGES.map((edge, i) => {
+              const from = TOPOLOGY_NODES.find(n => n.id === edge.from)!;
+              const to = TOPOLOGY_NODES.find(n => n.id === edge.to)!;
+              const isHighlighted = hovered === edge.from || hovered === edge.to || selectedNode === edge.from || selectedNode === edge.to;
+              const mx = (from.x + to.x) / 2;
+              const my = (from.y + to.y) / 2;
+              return (
+                <g key={i}>
+                  <line
+                    x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                    stroke={isHighlighted ? edge.color : `${edge.color}50`}
+                    strokeWidth={bwStroke(edge.bw)}
+                    strokeDasharray={edge.bw === "Backup" ? "4 3" : undefined}
+                  />
+                  <text x={mx} y={my - 5} textAnchor="middle" fontSize="8" fill={isHighlighted ? "#94A3B8" : "#2A3A44"} fontFamily="JetBrains Mono, monospace">
+                    {edge.label}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Nodes */}
+            {TOPOLOGY_NODES.map(node => {
+              const cfg = TOPO_NODE_CFG[node.type] ?? TOPO_NODE_CFG.server;
+              const isActive = selectedNode === node.id;
+              const isHov = hovered === node.id;
+              return (
+                <g
+                  key={node.id}
+                  data-node={node.id}
+                  transform={`translate(${node.x},${node.y})`}
+                  style={{ cursor: "pointer" }}
+                  onMouseEnter={() => setHovered(node.id)}
+                  onMouseLeave={() => setHovered(null)}
+                  onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}
+                >
+                  <circle r={22} fill={isActive ? `${cfg.color}25` : "#0C1117"} stroke={isActive || isHov ? cfg.color : `${cfg.color}60`} strokeWidth={isActive ? 2 : 1.5} />
+                  {(isHov || isActive) && <circle r={28} fill="none" stroke={`${cfg.color}20`} strokeWidth={6} />}
+                  <text textAnchor="middle" dominantBaseline="middle" fontSize="16" fill={cfg.color}>
+                    {/* SVG-safe icon substitute */}
+                    {node.type === "firewall" ? "🛡" : node.type === "switch" ? "⊟" : node.type === "database" ? "⊕" : node.type === "storage" ? "⊞" : node.type === "external" ? "⊗" : "⊙"}
+                  </text>
+                  <text x={0} y={32} textAnchor="middle" fontSize="9" fill={isActive || isHov ? "#C4D2DC" : "#4A6070"} fontFamily="JetBrains Mono, monospace">
+                    {node.label}
+                  </text>
+                  <text x={0} y={43} textAnchor="middle" fontSize="7.5" fill="#2A3A44" fontFamily="JetBrains Mono, monospace">
+                    {node.ip}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        </svg>
+
+        {/* Tooltip for selected node */}
+        {selNode && (
+          <div className="absolute bottom-4 left-4 rounded p-3 text-xs" style={{ ...MONO, backgroundColor: "#0C1117", border: `1px solid ${TOPO_NODE_CFG[selNode.type]?.color ?? "#00D4A8"}40`, minWidth: 180 }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-semibold text-foreground">{selNode.label}</span>
+              <button onClick={() => setSelectedNode(null)} style={{ color: "#4A6070" }}><X size={10} /></button>
+            </div>
+            <div className="space-y-1" style={{ color: "#4A6070" }}>
+              <div className="flex justify-between gap-4"><span>Тип</span><span style={{ color: TOPO_NODE_CFG[selNode.type]?.label ? "#C4D2DC" : "#4A6070" }}>{TOPO_NODE_CFG[selNode.type]?.label ?? selNode.type}</span></div>
+              <div className="flex justify-between gap-4"><span>IP</span><span style={{ color: "#00D4A8" }}>{selNode.ip}</span></div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Legend */}
+      <div className="w-48 flex-shrink-0 space-y-4">
+        <div>
+          <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>Узлы</div>
+          <div className="space-y-2">
+            {Object.entries(TOPO_NODE_CFG).map(([type, cfg]) => (
+              <div key={type} className="flex items-center gap-2 text-xs" style={{ color: "#94A3B8" }}>
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: `${cfg.color}25`, border: `1.5px solid ${cfg.color}` }} />
+                {cfg.label}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>Каналы</div>
+          <div className="space-y-2">
+            {[{ label: "10G Uplink", color: "#00D4A8", w: 2.5 }, { label: "1G Link", color: "#4A6070", w: 1.5 }, { label: "WAN", color: "#EF4444", w: 1 }, { label: "Backup", color: "#8B5CF6", w: 1, dash: true }].map(e => (
+              <div key={e.label} className="flex items-center gap-2 text-xs" style={{ color: "#94A3B8" }}>
+                <svg width="24" height="8">
+                  <line x1="0" y1="4" x2="24" y2="4" stroke={e.color} strokeWidth={e.w} strokeDasharray={e.dash ? "3 2" : undefined} />
+                </svg>
+                {e.label}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="text-xs" style={{ color: "#4A6070" }}>Прокрутка — масштаб</div>
+          <div className="text-xs mt-0.5" style={{ color: "#4A6070" }}>Перетяните — перемещение</div>
+          <div className="text-xs mt-0.5" style={{ color: "#4A6070" }}>Клик на узел — детали</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Hypervisor View ──────────────────────────────────────────────────────────
+
+function HypervisorView() {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ "pve-01": true, "pve-02": false });
+  const [selectedVM, setSelectedVM] = useState<{ pveId: string; vmId: string } | null>(null);
+
+  const toggle = (id: string) => setExpanded(e => ({ ...e, [id]: !e[id] }));
+
+  return (
+    <div className="flex gap-4">
+      <div className="flex-1 space-y-3">
+        {HYPERVISORS.map(pve => (
+          <Card key={pve.id} className="overflow-hidden">
+            {/* Hypervisor header */}
+            <button
+              className="w-full flex items-center gap-3 p-4 transition-colors hover:bg-muted text-left"
+              onClick={() => toggle(pve.id)}
+            >
+              <ChevronDown size={13} style={{ color: "#4A6070", transform: expanded[pve.id] ? "none" : "rotate(-90deg)", transition: "transform 0.15s" }} />
+              <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#E85D0415", border: "1px solid #E85D0440" }}>
+                <TerminalSquare size={14} style={{ color: "#E85D04" }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  {pve.name}
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ ...MONO, backgroundColor: "#E85D0415", color: "#E85D04", border: "1px solid #E85D0430" }}>Proxmox</span>
+                </div>
+                <div className="text-xs mt-0.5" style={{ ...MONO, color: "#4A6070" }}>{pve.version} · {pve.ip} · {pve.model}</div>
+              </div>
+              <div className="flex items-center gap-4 text-xs flex-shrink-0" style={MONO}>
+                <div className="text-right"><div style={{ color: "#94A3B8" }}>CPU</div><div style={{ color: pve.cpu > 70 ? "#F59E0B" : "#22C55E" }}>{pve.cpu}%</div></div>
+                <div className="text-right"><div style={{ color: "#94A3B8" }}>RAM</div><div style={{ color: pve.ram > 80 ? "#F59E0B" : "#22C55E" }}>{pve.ram}%</div></div>
+                <div className="text-right"><div style={{ color: "#94A3B8" }}>VMs</div><div style={{ color: "#C4D2DC" }}>{pve.vms.length}</div></div>
+              </div>
+            </button>
+
+            {/* VMs / LXC list */}
+            {expanded[pve.id] && (
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                {pve.vms.map(vm => {
+                  const isSelected = selectedVM?.pveId === pve.id && selectedVM?.vmId === vm.id;
+                  const isVm = vm.type === "vm";
+                  const typeColor = isVm ? "#3B82F6" : "#8B5CF6";
+                  const typeLabel = isVm ? "VM" : "LXC";
+                  const running = vm.status === "running";
+                  return (
+                    <button
+                      key={vm.id}
+                      className="w-full flex items-center gap-3 px-6 py-3 text-left transition-colors hover:bg-muted"
+                      style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", backgroundColor: isSelected ? "#00D4A808" : undefined }}
+                      onClick={() => setSelectedVM(isSelected ? null : { pveId: pve.id, vmId: vm.id })}
+                    >
+                      <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 text-xs font-bold" style={{ ...MONO, backgroundColor: `${typeColor}15`, color: typeColor, fontSize: 8 }}>{typeLabel}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-foreground" style={MONO}>{vm.name}</div>
+                        <div className="text-xs mt-0.5" style={{ ...MONO, color: "#4A6070" }}>{vm.os} · {vm.cores} vCPU · {vm.mem}</div>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs flex-shrink-0" style={MONO}>
+                        {running ? (
+                          <>
+                            <span style={{ color: "#4A6070" }}>CPU <span style={{ color: vm.cpu > 70 ? "#F59E0B" : "#94A3B8" }}>{vm.cpu}%</span></span>
+                            <span style={{ color: "#4A6070" }}>RAM <span style={{ color: vm.ram > 80 ? "#F59E0B" : "#94A3B8" }}>{vm.ram}%</span></span>
+                          </>
+                        ) : (
+                          <span style={{ color: "#4A6070" }}>—</span>
+                        )}
+                        <span className="flex items-center gap-1.5" style={{ color: running ? "#22C55E" : "#6B7280" }}>
+                          <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: running ? "#22C55E" : "#6B7280" }} />
+                          {running ? "running" : "stopped"}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+
+      {/* Detail panel */}
+      {selectedVM && (() => {
+        const pve = HYPERVISORS.find(h => h.id === selectedVM.pveId)!;
+        const vm = pve.vms.find(v => v.id === selectedVM.vmId)!;
+        const running = vm.status === "running";
+        const typeColor = vm.type === "vm" ? "#3B82F6" : "#8B5CF6";
+        return (
+          <div className="w-64 flex-shrink-0">
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold" style={{ ...MONO, color: typeColor }}>{vm.type === "vm" ? "Virtual Machine" : "LXC Container"}</span>
+                <button onClick={() => setSelectedVM(null)} style={{ color: "#4A6070" }}><X size={13} /></button>
+              </div>
+              <div className="text-sm font-semibold mb-1" style={MONO}>{vm.name}</div>
+              <div className="text-xs mb-4" style={{ ...MONO, color: "#4A6070" }}>на {pve.name}</div>
+              <div className="space-y-1.5 text-xs mb-4" style={MONO}>
+                {[["ОС", vm.os], ["vCPU", String(vm.cores)], ["RAM", vm.mem], ["ID", vm.id], ["Статус", vm.status]].map(([k, v]) => (
+                  <div key={k} className="flex justify-between py-1.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <span style={{ color: "#4A6070" }}>{k}</span>
+                    <span style={{ color: k === "Статус" ? (running ? "#22C55E" : "#6B7280") : "#94A3B8" }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              {running && (
+                <div className="space-y-3">
+                  <MetricBar label="CPU" value={vm.cpu} color={typeColor} />
+                  <MetricBar label="RAM" value={vm.ram} color={typeColor} />
+                  <MetricBar label="Disk" value={vm.disk} color={typeColor} />
+                </div>
+              )}
+            </Card>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ─── Containers View ──────────────────────────────────────────────────────────
+
+function ContainersView() {
+  const [tab, setTab] = useState<"docker" | "k8s">("docker");
+  const [expandedNode, setExpandedNode] = useState<string | null>("k8s-node-01");
+
+  return (
+    <div className="space-y-4">
+      <InfraSubTab tabs={[["docker", "Docker / Podman"], ["k8s", "Kubernetes"]]} active={tab} onChange={v => setTab(v as "docker" | "k8s")} />
+
+      {tab === "docker" && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs uppercase tracking-widest" style={{ ...MONO, color: "#4A6070" }}>Контейнеры ({DOCKER_CONTAINERS.length})</div>
+            <div className="flex gap-3 text-xs" style={MONO}>
+              <span style={{ color: "#22C55E" }}>{DOCKER_CONTAINERS.filter(c => c.status === "running").length} running</span>
+              <span style={{ color: "#6B7280" }}>{DOCKER_CONTAINERS.filter(c => c.status !== "running").length} stopped</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {DOCKER_CONTAINERS.map(c => {
+              const running = c.status === "running";
+              return (
+                <Card key={c.id} className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: running ? "#2496ED15" : "#4A607015", border: `1px solid ${running ? "#2496ED30" : "#4A607030"}` }}>
+                      <Box size={13} style={{ color: running ? "#2496ED" : "#4A6070" }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground" style={MONO}>{c.name}</span>
+                        <span className="flex items-center gap-1 text-xs" style={{ ...MONO, color: running ? "#22C55E" : "#6B7280" }}>
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: running ? "#22C55E" : "#6B7280" }} />
+                          {c.status}
+                        </span>
+                      </div>
+                      <div className="text-xs mt-0.5 truncate" style={{ ...MONO, color: "#4A6070" }}>{c.image}</div>
+                    </div>
+                    <div className="flex gap-6 text-xs flex-shrink-0" style={MONO}>
+                      <div className="text-right">
+                        <div style={{ color: "#4A6070" }}>CPU</div>
+                        <div style={{ color: running ? "#94A3B8" : "#2A3A44" }}>{running ? `${c.cpu}%` : "—"}</div>
+                      </div>
+                      <div className="text-right">
+                        <div style={{ color: "#4A6070" }}>RAM</div>
+                        <div style={{ color: running ? "#94A3B8" : "#2A3A44" }}>{running ? `${c.ram > 1000 ? (c.ram / 1024).toFixed(1) + " GB" : c.ram + " MB"}` : "—"}</div>
+                      </div>
+                      <div className="text-right">
+                        <div style={{ color: "#4A6070" }}>Хост</div>
+                        <div style={{ color: "#94A3B8" }}>{c.host.split(" / ")[1]}</div>
+                      </div>
+                      <div className="text-right">
+                        <div style={{ color: "#4A6070" }}>Аптайм</div>
+                        <div style={{ color: "#94A3B8" }}>{c.uptime}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-3 pt-3 text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.04)", ...MONO, color: "#4A6070" }}>
+                    <span>Порты: <span style={{ color: "#38BDF8" }}>{c.ports}</span></span>
+                    <span>·</span>
+                    <span>Сеть: <span style={{ color: "#8B5CF6" }}>{c.network}</span></span>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {tab === "k8s" && (
+        <div>
+          <div className="flex items-center gap-3 mb-4 p-3 rounded" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
+            <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#326CE515" }}>
+              <Layers size={13} style={{ color: "#326CE5" }} />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-foreground">k8s-prod-01</div>
+              <div className="text-xs" style={{ ...MONO, color: "#4A6070" }}>Kubernetes v1.29.4 · 3 узла · Namespace: production, kube-system, monitoring</div>
+            </div>
+            <div className="flex gap-4 text-xs" style={MONO}>
+              <span style={{ color: "#22C55E" }}>{K8S_NODES.filter(n => n.status === "ready").length} ready</span>
+              <span style={{ color: "#EF4444" }}>{K8S_NODES.filter(n => n.status !== "ready").length} not ready</span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {K8S_NODES.map(node => {
+              const ready = node.status === "ready";
+              const isExp = expandedNode === node.id;
+              return (
+                <Card key={node.id} className="overflow-hidden">
+                  <button
+                    className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted transition-colors"
+                    onClick={() => setExpandedNode(isExp ? null : node.id)}
+                  >
+                    <ChevronDown size={13} style={{ color: "#4A6070", transform: isExp ? "none" : "rotate(-90deg)", transition: "transform 0.15s" }} />
+                    <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: ready ? "#22C55E15" : "#EF444415", border: `1px solid ${ready ? "#22C55E30" : "#EF444430"}` }}>
+                      <GitBranch size={13} style={{ color: ready ? "#22C55E" : "#EF4444" }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <span style={MONO}>{node.name}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded" style={{ ...MONO, backgroundColor: node.role === "master" ? "#8B5CF615" : "#3B82F615", color: node.role === "master" ? "#8B5CF6" : "#3B82F6", border: `1px solid ${node.role === "master" ? "#8B5CF630" : "#3B82F630"}` }}>
+                          {node.role}
+                        </span>
+                      </div>
+                      <div className="text-xs mt-0.5" style={{ ...MONO, color: "#4A6070" }}>{node.ip} · {node.pods.length} pods</div>
+                    </div>
+                    <div className="flex gap-4 text-xs flex-shrink-0" style={MONO}>
+                      {ready ? (
+                        <>
+                          <span style={{ color: "#4A6070" }}>CPU <span style={{ color: "#94A3B8" }}>{node.cpu}%</span></span>
+                          <span style={{ color: "#4A6070" }}>RAM <span style={{ color: "#94A3B8" }}>{node.ram}%</span></span>
+                        </>
+                      ) : (
+                        <span style={{ color: "#EF4444" }}>NOT READY</span>
+                      )}
+                    </div>
+                  </button>
+
+                  {isExp && node.pods.length > 0 && (
+                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                      {node.pods.map((pod, i) => (
+                        <div key={i} className="flex items-center gap-3 px-6 py-2.5" style={{ borderBottom: i < node.pods.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
+                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: "#22C55E" }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-foreground" style={MONO}>{pod.name}</div>
+                            <div className="text-xs truncate mt-0.5" style={{ ...MONO, color: "#4A6070" }}>{pod.image}</div>
+                          </div>
+                          <span className="text-xs px-2 py-0.5 rounded flex-shrink-0" style={{ ...MONO, backgroundColor: "#22C55E10", color: "#22C55E", border: "1px solid #22C55E20" }}>
+                            {pod.status}
+                          </span>
+                          <span className="text-xs flex-shrink-0" style={{ ...MONO, color: "#4A6070" }}>{pod.namespace}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {isExp && node.pods.length === 0 && (
+                    <div className="px-6 py-3 text-xs" style={{ ...MONO, color: "#4A6070", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                      Узел недоступен — поды не запущены
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Infrastructure ───────────────────────────────────────────────────────────
 
 function Infra() {
+  const [subTab, setSubTab] = useState<"devices" | "topology" | "hypervisors" | "containers">("devices");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string>("Главный офис");
   const device = selectedId ? DEVICES.find(d => d.id === selectedId) : null;
   const locations = [...new Set(DEVICES.map(d => d.location))];
 
   return (
-    <div className="flex gap-4 h-full">
-      {/* Tree */}
-      <div className="w-52 flex-shrink-0 space-y-0.5">
-        <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>Структура</div>
-        {locations.map(loc => (
-          <div key={loc}>
-            <button onClick={() => setExpanded(loc === expanded ? "" : loc)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-foreground hover:bg-muted transition-colors">
-              <ChevronRight size={11} style={{ transition: "transform 0.15s", transform: expanded === loc ? "rotate(90deg)" : "none" }} />
-              <Building2 size={11} style={{ color: "#4A6070" }} />
-              <span className="flex-1 text-left">{loc}</span>
-            </button>
-            {expanded === loc && DEVICES.filter(d => d.location === loc).map(d => {
-              const Icon = DEVICE_ICON[d.type] ?? Server;
-              const active = selectedId === d.id;
-              return (
-                <button key={d.id} onClick={() => setSelectedId(d.id === selectedId ? null : d.id)} className="w-full flex items-center gap-2 px-4 py-1.5 rounded text-xs transition-colors" style={{ color: active ? "#00D4A8" : "#4A6070", backgroundColor: active ? "#00D4A810" : "transparent" }}>
-                  <Icon size={10} />
-                  <span className="flex-1 text-left" style={MONO}>{d.name}</span>
-                  <StatusDot status={d.status} size={5} />
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+    <div className="flex flex-col h-full">
+      <InfraSubTab
+        tabs={[["devices", "Устройства"], ["topology", "Топология сети"], ["hypervisors", "Гипервизоры"], ["containers", "Контейнеры / K8s"]]}
+        active={subTab}
+        onChange={v => { setSubTab(v as typeof subTab); setSelectedId(null); }}
+      />
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        {!device ? (
-          <>
-            <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>Оборудование</div>
-            <div className="grid grid-cols-3 gap-3">
-              {DEVICES.map(d => {
-                const Icon = DEVICE_ICON[d.type] ?? Server;
-                const sc = STATUS_CFG[d.status];
-                return (
-                  <Card key={d.id} className="p-4 hover:border-[rgba(255,255,255,0.15)] transition-colors" onClick={() => setSelectedId(d.id)}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Icon size={15} style={{ color: sc.color }} />
-                        <span className="text-xs font-medium" style={MONO}>{d.name}</span>
-                      </div>
-                      <StatusDot status={d.status} size={6} />
-                    </div>
-                    <div className="text-xs mb-3" style={{ color: "#4A6070" }}>{d.model}</div>
-                    <div className="space-y-2">
-                      {d.cpu != null && <MetricBar label="CPU" value={d.cpu} color="#00D4A8" />}
-                      {d.ram != null && <MetricBar label="RAM" value={d.ram} color="#3B82F6" />}
-                      {d.disk != null && <MetricBar label="Disk" value={d.disk} color="#8B5CF6" />}
-                    </div>
-                    <div className="mt-3 pt-3 flex justify-between text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.05)", ...MONO, color: "#4A6070" }}>
-                      <span>{d.ip}</span>
-                      <span>{d.uptime}</span>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <button onClick={() => setSelectedId(null)} className="p-1 rounded transition-colors hover:bg-muted" style={{ color: "#4A6070" }}>
-                <ChevronLeft size={15} />
-              </button>
-              <span className="text-xs uppercase tracking-widest" style={{ ...MONO, color: "#4A6070" }}>{device.name}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2 space-y-4">
-                <Card className="p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      {(() => { const Icon = DEVICE_ICON[device.type] ?? Server; return <Icon size={18} style={{ color: STATUS_CFG[device.status].color }} />; })()}
-                      <div>
-                        <div className="font-semibold" style={MONO}>{device.name}</div>
-                        <div className="text-sm" style={{ color: "#4A6070" }}>{device.model}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <StatusDot status={device.status} size={7} />
-                      <span className="text-sm" style={{ color: STATUS_CFG[device.status].color }}>{STATUS_CFG[device.status].label}</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-0 text-xs" style={MONO}>
-                    {[["Серийный номер", device.serial], ["IP-адрес", device.ip, "#00D4A8"], ["ОС / прошивка", device.os], ["Аптайм", device.uptime], ["Стойка / юниты", `${device.rack} ${device.unit}`], ["Гарантия до", device.warranty]].map(([k, v, clr]) => (
-                      <div key={String(k)} className="flex justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                        <span style={{ color: "#4A6070" }}>{k}</span>
-                        <span style={clr ? { color: clr as string } : {}}>{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-                <Card className="p-4">
-                  <div className="text-xs mb-3" style={{ ...MONO, color: "#4A6070" }}>НАГРУЗКА CPU (ПОСЛЕДНИЕ 12 ТОЧЕК)</div>
-                  <ResponsiveContainer width="100%" height={72}>
-                    <AreaChart data={device.cpuHistory.map((v, i) => ({ v, i }))} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-                      <defs>
-                        <linearGradient id="cpuG" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={device.cpu > 65 ? "#F59E0B" : "#00D4A8"} stopOpacity={0.3} />
-                          <stop offset="95%" stopColor={device.cpu > 65 ? "#F59E0B" : "#00D4A8"} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="i" hide />
-                      <Tooltip contentStyle={{ background: "#0C1117", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2, fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }} formatter={(v: number) => [`${v}%`, "CPU"]} labelFormatter={() => ""} />
-                      <Area type="monotone" dataKey="v" stroke={device.cpu > 65 ? "#F59E0B" : "#00D4A8"} strokeWidth={1.5} fill="url(#cpuG)" dot={false} isAnimationActive={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </Card>
+      {subTab === "topology" && (
+        <div className="flex-1 min-h-0" style={{ height: "calc(100% - 40px)" }}>
+          <NetworkTopology />
+        </div>
+      )}
+
+      {subTab === "hypervisors" && <HypervisorView />}
+
+      {subTab === "containers" && <ContainersView />}
+
+      {subTab === "devices" && (
+        <div className="flex gap-4 flex-1 min-h-0">
+          {/* Tree */}
+          <div className="w-52 flex-shrink-0 space-y-0.5">
+            <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>Структура</div>
+            {locations.map(loc => (
+              <div key={loc}>
+                <button onClick={() => setExpanded(loc === expanded ? "" : loc)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-foreground hover:bg-muted transition-colors">
+                  <ChevronRight size={11} style={{ transition: "transform 0.15s", transform: expanded === loc ? "rotate(90deg)" : "none" }} />
+                  <Building2 size={11} style={{ color: "#4A6070" }} />
+                  <span className="flex-1 text-left">{loc}</span>
+                </button>
+                {expanded === loc && DEVICES.filter(d => d.location === loc).map(d => {
+                  const Icon = DEVICE_ICON[d.type] ?? Globe;
+                  const active = selectedId === d.id;
+                  return (
+                    <button key={d.id} onClick={() => setSelectedId(d.id === selectedId ? null : d.id)} className="w-full flex items-center gap-2 px-4 py-1.5 rounded text-xs transition-colors" style={{ color: active ? "#00D4A8" : "#4A6070", backgroundColor: active ? "#00D4A810" : "transparent" }}>
+                      <Icon size={10} />
+                      <span className="flex-1 text-left" style={MONO}>{d.name}</span>
+                      <StatusDot status={d.status} size={5} />
+                    </button>
+                  );
+                })}
               </div>
-              <div className="space-y-4">
-                <Card className="p-4">
-                  <div className="text-xs mb-3" style={{ ...MONO, color: "#4A6070" }}>ЗАГРУЗКА</div>
-                  <div className="space-y-3">
-                    {device.cpu != null && <MetricBar label="CPU" value={device.cpu} color="#00D4A8" />}
-                    {device.ram != null && <MetricBar label="RAM" value={device.ram} color="#3B82F6" />}
-                    {device.disk != null && <MetricBar label="Disk" value={device.disk} color="#8B5CF6" />}
-                  </div>
-                </Card>
-                {device.vms.length > 0 && (
-                  <Card className="p-4">
-                    <div className="text-xs mb-3" style={{ ...MONO, color: "#4A6070" }}>ВИРТУАЛЬНЫЕ МАШИНЫ</div>
-                    <div className="space-y-2">
-                      {device.vms.map(vm => (
-                        <div key={vm} className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#22C55E" }} />
-                          <span className="text-xs" style={MONO}>{vm}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                )}
-              </div>
-            </div>
+            ))}
           </div>
-        )}
-      </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0 overflow-auto">
+            {!device ? (
+              <>
+                <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>Оборудование</div>
+                <div className="grid grid-cols-3 gap-3">
+                  {DEVICES.map(d => {
+                    const Icon = DEVICE_ICON[d.type] ?? Globe;
+                    const sc = STATUS_CFG[d.status];
+                    return (
+                      <Card key={d.id} className="p-4 hover:border-[rgba(255,255,255,0.15)] transition-colors" onClick={() => setSelectedId(d.id)}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Icon size={15} style={{ color: sc.color }} />
+                            <span className="text-xs font-medium" style={MONO}>{d.name}</span>
+                          </div>
+                          <StatusDot status={d.status} size={6} />
+                        </div>
+                        <div className="text-xs mb-3" style={{ color: "#4A6070" }}>{d.model}</div>
+                        <div className="space-y-2">
+                          {d.cpu != null && <MetricBar label="CPU" value={d.cpu} color="#00D4A8" />}
+                          {d.ram != null && <MetricBar label="RAM" value={d.ram} color="#3B82F6" />}
+                          {d.disk != null && <MetricBar label="Disk" value={d.disk} color="#8B5CF6" />}
+                        </div>
+                        <div className="mt-3 pt-3 flex justify-between text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.05)", ...MONO, color: "#4A6070" }}>
+                          <span>{d.ip}</span>
+                          <span>{d.uptime}</span>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <button onClick={() => setSelectedId(null)} className="p-1 rounded transition-colors hover:bg-muted" style={{ color: "#4A6070" }}>
+                    <ChevronLeft size={15} />
+                  </button>
+                  <span className="text-xs uppercase tracking-widest" style={{ ...MONO, color: "#4A6070" }}>{device.name}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2 space-y-4">
+                    <Card className="p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          {(() => { const Icon = DEVICE_ICON[device.type] ?? Globe; return <Icon size={18} style={{ color: STATUS_CFG[device.status].color }} />; })()}
+                          <div>
+                            <div className="font-semibold" style={MONO}>{device.name}</div>
+                            <div className="text-sm" style={{ color: "#4A6070" }}>{device.model}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <StatusDot status={device.status} size={7} />
+                          <span className="text-sm" style={{ color: STATUS_CFG[device.status].color }}>{STATUS_CFG[device.status].label}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-0 text-xs" style={MONO}>
+                        {[["Серийный номер", device.serial], ["IP-адрес", device.ip, "#00D4A8"], ["ОС / прошивка", device.os], ["Аптайм", device.uptime], ["Стойка / юниты", `${device.rack} ${device.unit}`], ["Гарантия до", device.warranty]].map(([k, v, clr]) => (
+                          <div key={String(k)} className="flex justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                            <span style={{ color: "#4A6070" }}>{k}</span>
+                            <span style={clr ? { color: clr as string } : {}}>{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                    <Card className="p-4">
+                      <div className="text-xs mb-3" style={{ ...MONO, color: "#4A6070" }}>НАГРУЗКА CPU (ПОСЛЕДНИЕ 12 ТОЧЕК)</div>
+                      <ResponsiveContainer width="100%" height={72}>
+                        <AreaChart data={device.cpuHistory.map((v, i) => ({ v, i }))} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+                          <defs>
+                            <linearGradient id="cpuG" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={device.cpu > 65 ? "#F59E0B" : "#00D4A8"} stopOpacity={0.3} />
+                              <stop offset="95%" stopColor={device.cpu > 65 ? "#F59E0B" : "#00D4A8"} stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis dataKey="i" hide />
+                          <Tooltip contentStyle={{ background: "#0C1117", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2, fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }} formatter={(v: number) => [`${v}%`, "CPU"]} labelFormatter={() => ""} />
+                          <Area type="monotone" dataKey="v" stroke={device.cpu > 65 ? "#F59E0B" : "#00D4A8"} strokeWidth={1.5} fill="url(#cpuG)" dot={false} isAnimationActive={false} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </Card>
+                  </div>
+                  <div className="space-y-4">
+                    <Card className="p-4">
+                      <div className="text-xs mb-3" style={{ ...MONO, color: "#4A6070" }}>ЗАГРУЗКА</div>
+                      <div className="space-y-3">
+                        {device.cpu != null && <MetricBar label="CPU" value={device.cpu} color="#00D4A8" />}
+                        {device.ram != null && <MetricBar label="RAM" value={device.ram} color="#3B82F6" />}
+                        {device.disk != null && <MetricBar label="Disk" value={device.disk} color="#8B5CF6" />}
+                      </div>
+                    </Card>
+                    {device.vms.length > 0 && (
+                      <Card className="p-4">
+                        <div className="text-xs mb-3" style={{ ...MONO, color: "#4A6070" }}>ВИРТУАЛЬНЫЕ МАШИНЫ</div>
+                        <div className="space-y-2">
+                          {device.vms.map(vm => (
+                            <div key={vm} className="flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#22C55E" }} />
+                              <span className="text-xs" style={MONO}>{vm}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -786,7 +1508,7 @@ function Finance() {
           {INVOICES.map(inv => (
             <Card key={inv.id} className="p-4 flex items-center gap-4">
               <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: inv.status === "paid" ? "#22C55E15" : "#F59E0B15" }}>
-                <CreditCard size={13} style={{ color: inv.status === "paid" ? "#22C55E" : "#F59E0B" }} />
+                <Download size={13} style={{ color: inv.status === "paid" ? "#22C55E" : "#F59E0B" }} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-foreground">{inv.period}</div>
@@ -843,11 +1565,12 @@ const NAV = [
   { id: "dashboard", label: "Обзор", icon: LayoutDashboard },
   { id: "servicedesk", label: "Заявки", icon: LifeBuoy, badge: 2 },
   { id: "docs", label: "Документы", icon: BookOpen },
-  { id: "infra", label: "Инфраструктура", icon: Server },
-  { id: "finance", label: "Финансы", icon: CreditCard },
+  { id: "infra", label: "Инфраструктура", icon: Globe },
+  { id: "finance", label: "Финансы", icon: Download },
 ] as const;
 
 function Sidebar({ view, setView }: { view: string; setView: (v: string) => void }) {
+  const navView = view === "fullchat" ? "servicedesk" : view;
   return (
     <div className="w-52 flex-shrink-0 flex flex-col" style={{ backgroundColor: "#04070A", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
       <div className="px-4 pt-5 pb-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
@@ -875,7 +1598,7 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
       <nav className="flex-1 px-2 py-3 space-y-0.5">
         {NAV.map(item => {
           const Icon = item.icon;
-          const active = view === item.id;
+          const active = navView === item.id;
           return (
             <button key={item.id} onClick={() => setView(item.id)} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-sm transition-all" style={{ color: active ? "#00D4A8" : "#4A6070", backgroundColor: active ? "#00D4A810" : "transparent", borderLeft: active ? "2px solid #00D4A8" : "2px solid transparent", paddingLeft: active ? 10 : 12 }}>
               <Icon size={14} />
@@ -914,10 +1637,21 @@ const PAGE_TITLES: Record<string, string> = {
   docs: "Документы и журнал работ",
   infra: "Инфраструктура",
   finance: "Финансы",
+  fullchat: "Чат по заявке",
 };
 
 export default function App() {
   const [view, setView] = useState("dashboard");
+  const [chatTicketId, setChatTicketId] = useState<string>("INC-2847");
+
+  const openChat = (ticketId: string) => {
+    setChatTicketId(ticketId);
+    setView("fullchat");
+  };
+
+  const pageTitle = view === "fullchat"
+    ? `${PAGE_TITLES.fullchat} · ${chatTicketId}`
+    : PAGE_TITLES[view] ?? view;
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }}>
@@ -925,7 +1659,7 @@ export default function App() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-3 flex-shrink-0" style={{ backgroundColor: "#04070A", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <div>
-            <h1 className="text-sm font-semibold text-foreground">{PAGE_TITLES[view]}</h1>
+            <h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1>
             <div className="text-xs mt-0.5" style={{ ...MONO, color: "#4A6070" }}>ООО «АльфаТрейд» · 16.07.2024</div>
           </div>
           <div className="flex items-center gap-2">
@@ -942,10 +1676,15 @@ export default function App() {
         </div>
         <div className="flex-1 overflow-auto p-6">
           {view === "dashboard" && <Dashboard />}
-          {view === "servicedesk" && <ServiceDesk />}
+          {view === "servicedesk" && <ServiceDesk onOpenChat={openChat} />}
           {view === "docs" && <Docs />}
           {view === "infra" && <Infra />}
           {view === "finance" && <Finance />}
+          {view === "fullchat" && (
+            <div className="flex flex-col h-full -m-6 overflow-hidden">
+              <FullChat ticketId={chatTicketId} onBack={() => setView("servicedesk")} />
+            </div>
+          )}
         </div>
       </div>
     </div>

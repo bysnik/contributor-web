@@ -1,7 +1,7 @@
 
   # Customer Portal Dashboard
 
-  This is a code bundle for Customer Portal Dashboard. The original project is available at https://www.figma.com/design/dwtvRkE5SjdExe2rLevP2V/Customer-Portal-Dashboard.
+  This is a code bundle for Customer Portal Dashboard. The original project is available at https://www.figma.com/design/oMQCbZQWdS7jyvgHX2DTJD/Customer-Portal-Dashboard.
 
   ## Running the code
 
