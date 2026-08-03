@@ -10,7 +10,10 @@ import {
   Key, Copy, EyeOff, BarChart2, Calendar, Code2,
   TrendingUp, Users, Newspaper, Star, User, Package,
   History, Trash2, Edit3, ExternalLink, Lock, Radio,
-  ChevronUp, Network, Cpu,
+  ChevronUp, Network, Cpu, BellRing, BookMarked,
+  MessageSquare, Wrench, Timer, LogOut,
+  ArrowRightLeft, Gauge, PlayCircle, StopCircle,
+  Flame, GitMerge, StickyNote, LayoutGrid,
 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
@@ -1247,6 +1250,447 @@ function AuditPage() {
   );
 }
 
+// ─── Engineer Data ────────────────────────────────────────────────────────────
+
+const CLIENTS = [
+  { id: "alfatrade", name: "ООО «АльфаТрейд»", industry: "Торговля", devices: 5, tickets: 3, status: "ok", initials: "АТ", color: "#00D4A8", lastVisit: "Сегодня" },
+  { id: "medclinic", name: "Клиника «МедЦентр»", industry: "Медицина", devices: 12, tickets: 1, status: "warning", initials: "МЦ", color: "#F59E0B", lastVisit: "Вчера" },
+  { id: "school42", name: "Школа №42 г. Москвы", industry: "Образование", devices: 34, tickets: 7, status: "critical", initials: "Ш4", color: "#EF4444", lastVisit: "16.07.2024" },
+  { id: "promtech", name: "ПромТех ООО", industry: "Производство", devices: 18, tickets: 0, status: "ok", initials: "ПТ", color: "#3B82F6", lastVisit: "15.07.2024" },
+  { id: "megabank", name: "МегаБанк НКО", industry: "Финансы", devices: 8, tickets: 2, status: "ok", initials: "МБ", color: "#8B5CF6", lastVisit: "14.07.2024" },
+  { id: "autopark", name: "АвтоПарк Логистик", industry: "Логистика", devices: 22, tickets: 0, status: "ok", initials: "АЛ", color: "#22C55E", lastVisit: "10.07.2024" },
+];
+
+const NOC_ALERTS = [
+  { id: 1, client: "Школа №42", device: "srv-main-01", severity: "critical", message: "CPU > 95% на протяжении 10 мин.", time: "14:15", acked: false, suppressed: false },
+  { id: 2, client: "Школа №42", device: "srv-db-02", severity: "critical", message: "Диск /var заполнен на 99.2%", time: "14:02", acked: false, suppressed: false },
+  { id: 3, client: "Клиника «МедЦентр»", device: "fw-clinic-01", severity: "warning", message: "CPU FortiGate > 80% более 5 мин.", time: "13:48", acked: true, suppressed: false },
+  { id: 4, client: "ПромТех ООО", device: "sw-floor-03", severity: "warning", message: "Потеря пакетов 8% на аплинке", time: "13:30", acked: false, suppressed: true },
+  { id: 5, client: "МегаБанк НКО", device: "srv-app-bank", severity: "warning", message: "RAM > 85% (pgbouncer)", time: "13:11", acked: false, suppressed: false },
+  { id: 6, client: "ООО «АльфаТрейд»", device: "fw-01", severity: "warning", message: "CPU FireWall 71% (порог 70%)", time: "12:55", acked: true, suppressed: false },
+];
+
+const KANBAN_TICKETS = {
+  new: [
+    { id: "INC-2850", client: "Школа №42", title: "Не работает проектор в 301 кабинете", priority: "medium", slaLeft: 480 },
+    { id: "REQ-0415", client: "МегаБанк НКО", title: "Создать VPN-профиль для нового сотрудника", priority: "low", slaLeft: 720 },
+  ],
+  in_progress: [
+    { id: "INC-2847", client: "ООО «АльфаТрейд»", title: "Нет доступа к 1С с рабочих станций", priority: "critical", slaLeft: 47, assignee: "Иванов И.А." },
+    { id: "INC-2845", client: "Клиника «МедЦентр»", title: "Медленная работа МИС", priority: "high", slaLeft: 120, assignee: "Сидоров С.К." },
+  ],
+  awaiting: [
+    { id: "INC-2841", client: "ООО «АльфаТрейд»", title: "Медленная работа Wi-Fi в конференц-зале", priority: "high", slaLeft: 180 },
+    { id: "INC-2839", client: "ПромТех ООО", title: "Принтер не принимает задания", priority: "medium", slaLeft: 320 },
+  ],
+  critical: [
+    { id: "INC-2848", client: "Школа №42", title: "Упал основной сервер — srv-main-01", priority: "critical", slaLeft: 12, assignee: "Иванов И.А." },
+    { id: "INC-2849", client: "Школа №42", title: "БД СУБД на srv-db-02 переполнена", priority: "critical", slaLeft: 28, assignee: "Сидоров С.К." },
+  ],
+  closed: [
+    { id: "REQ-0412", client: "ООО «АльфаТрейд»", title: "Создание пользователя в AD для Смирновой Е.В.", priority: "low", slaLeft: 0 },
+    { id: "CHG-0089", client: "МегаБанк НКО", title: "Обновление антивируса на серверах", priority: "low", slaLeft: 0 },
+  ],
+};
+
+const WIKI_ENTRIES = [
+  { id: 1, title: "Сброс пароля AD без перезагрузки компьютера", category: "Active Directory", tags: ["AD", "PowerShell"], snippet: "Get-ADUser -Identity username | Set-ADAccountPassword -Reset -NewPassword (ConvertTo-SecureString 'NewPass123!' -AsPlainText -Force)", views: 42, updated: "10.07.2024" },
+  { id: 2, title: "Очистка WAL-архивов PostgreSQL", category: "PostgreSQL", tags: ["PostgreSQL", "Bash"], snippet: "find /var/lib/postgresql/14/main/pg_wal -maxdepth 1 -name '*.history' -mtime +7 -delete", views: 28, updated: "15.07.2024" },
+  { id: 3, title: "Проверка состояния Proxmox RAID", category: "Proxmox", tags: ["Proxmox", "RAID"], snippet: "pvs && vgs && lvs # then: cat /proc/mdstat", views: 19, updated: "01.07.2024" },
+  { id: 4, title: "Быстрый деплой Zabbix агента (Ansible)", category: "Ansible", tags: ["Ansible", "Zabbix"], snippet: "ansible <host> -m apt -a 'name=zabbix-agent2 state=present' && ansible <host> -m service -a 'name=zabbix-agent2 state=started'", views: 35, updated: "08.07.2024" },
+  { id: 5, title: "Постмортем: падение 1С 16.07.2024 (АльфаТрейд)", category: "Post-Mortem", tags: ["1С", "PostgreSQL"], snippet: "Причина: диск /var/lib/postgresql заполнен (99.8%). Решение: очистка WAL. Превентив: алерт Zabbix на 85%.", views: 7, updated: "16.07.2024" },
+];
+
+const TEAM_MESSAGES = [
+  { id: 1, from: "Сидоров С.К.", initials: "СС", color: "#3B82F6", time: "14:10", text: "Иван, посмотри INC-2848 по Школе №42 — там сервер упал, нужна помощь с восстановлением." },
+  { id: 2, from: "Иванов И.А.", initials: "ИИ", color: "#00D4A8", time: "14:12", text: "Вижу, уже подключился. Похоже на отказ диска в RAID. Запускаю mdadm --examine." },
+  { id: 3, from: "Петров В.С.", initials: "ПВ", color: "#8B5CF6", time: "14:15", text: "Я на стороне клиента, они паникуют. Скажите примерный таймлайн восстановления?" },
+  { id: 4, from: "Иванов И.А.", initials: "ИИ", color: "#00D4A8", time: "14:18", text: "Резервная копия с 03:00 ночи. Восстановление займёт 40–60 минут. Скажи им час." },
+  { id: 5, from: "Сидоров С.К.", initials: "СС", color: "#3B82F6", time: "14:20", text: "Принял. @Петров В.С. — скажи директору, что плановый резерв свежий, данные не потеряем." },
+];
+
+const ENGINEER_KPI = {
+  openTickets: 8,
+  mttr: "1ч 24м",
+  resolved30d: 47,
+  avgSlaScore: 98.4,
+  clients: [
+    { name: "ООО «АльфаТрейд»", status: "ok", openTickets: 3, sla: 99.87 },
+    { name: "Клиника «МедЦентр»", status: "warning", openTickets: 1, sla: 98.20 },
+    { name: "Школа №42", status: "critical", openTickets: 9, sla: 94.50 },
+    { name: "ПромТех ООО", status: "ok", openTickets: 0, sla: 99.99 },
+    { name: "МегаБанк НКО", status: "ok", openTickets: 2, sla: 99.92 },
+  ],
+  weeklyResolved: [6, 9, 5, 12, 8, 7, 10],
+};
+
+// ─── Impersonation Banner ─────────────────────────────────────────────────────
+
+function ImpersonationBanner({ clientName, onExit }: { clientName: string; onExit: () => void }) {
+  return (
+    <div className="flex-shrink-0 flex items-center justify-between px-6 py-2" style={{ backgroundColor: "#F59E0B", color: "#000" }}>
+      <div className="flex items-center gap-2 text-xs font-semibold"><Eye size={13} />Режим просмотра: <span className="font-bold">{clientName}</span> — вы видите портал глазами клиента</div>
+      <button onClick={onExit} className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded" style={{ backgroundColor: "rgba(0,0,0,0.2)" }}><LogOut size={11} />Выйти из режима клиента</button>
+    </div>
+  );
+}
+
+// ─── Switch Account Page ──────────────────────────────────────────────────────
+
+function SwitchAccountPage({ currentClientId, onSelectClient, onSelectEngineer }: { currentClientId: string | null; onSelectClient: (id: string) => void; onSelectEngineer: () => void }) {
+  const [search, setSearch] = useState("");
+  const filtered = CLIENTS.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.industry.toLowerCase().includes(search.toLowerCase()));
+  const statusColor = (s: string) => s === "ok" ? "#22C55E" : s === "warning" ? "#F59E0B" : "#EF4444";
+
+  return (
+    <div className="space-y-6">
+      {/* Engineer profile */}
+      <div>
+        <div className="text-xs uppercase tracking-widest mb-3" style={{ ...MONO, color: "#4A6070" }}>Мой инженерный профиль</div>
+        <div className="p-5 rounded flex items-center gap-5" style={{ border: `2px solid ${!currentClientId ? "#00D4A8" : "rgba(255,255,255,0.065)"}`, backgroundColor: !currentClientId ? "#00D4A808" : "#0C1117" }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0" style={{ ...MONO, backgroundColor: "#00D4A818", color: "#00D4A8", border: "2px solid #00D4A840" }}>ИИ</div>
+          <div className="flex-1">
+            <div className="text-base font-semibold text-foreground">Иванов Илья Александрович</div>
+            <div className="text-sm mt-0.5" style={{ color: "#4A6070" }}>Старший инженер · TechCore Systems</div>
+            <div className="flex items-center gap-2 mt-2"><span className="text-xs px-2 py-0.5 rounded" style={{ ...MONO, backgroundColor: "#00D4A815", color: "#00D4A8", border: "1px solid #00D4A830" }}>Полный доступ</span><span className="text-xs px-2 py-0.5 rounded" style={{ ...MONO, backgroundColor: "#8B5CF615", color: "#8B5CF6", border: "1px solid #8B5CF630" }}>Инженер L2</span></div>
+          </div>
+          <button onClick={onSelectEngineer} className="px-5 py-2.5 rounded font-medium" style={{ backgroundColor: !currentClientId ? "#00D4A820" : "#00D4A8", color: !currentClientId ? "#00D4A8" : "#000", border: !currentClientId ? "1px solid #00D4A840" : "none" }}>
+            {!currentClientId ? "✓ Активный режим" : "Вернуться как инженер"}
+          </button>
+        </div>
+      </div>
+
+      {/* Client list */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs uppercase tracking-widest" style={{ ...MONO, color: "#4A6070" }}>Клиентские аккаунты ({CLIENTS.length})</div>
+          <div className="relative"><Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#4A6070" }} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск клиента..." className="rounded text-xs pl-7 pr-3 py-1.5 outline-none" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC", width: 200 }} /></div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {filtered.map(client => {
+            const isActive = currentClientId === client.id;
+            return (
+              <div key={client.id} className="p-4 rounded transition-all" style={{ border: `2px solid ${isActive ? client.color : "rgba(255,255,255,0.065)"}`, backgroundColor: isActive ? `${client.color}08` : "#0C1117" }}>
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0" style={{ ...MONO, backgroundColor: `${client.color}20`, color: client.color, border: `1.5px solid ${client.color}50` }}>{client.initials}</div>
+                  <div className="flex-1 min-w-0"><div className="text-sm font-semibold text-foreground truncate">{client.name}</div><div className="text-xs mt-0.5" style={{ color: "#4A6070" }}>{client.industry}</div></div>
+                  <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: statusColor(client.status) }} />
+                </div>
+                <div className="flex gap-4 text-xs mb-3" style={{ ...MONO, color: "#4A6070" }}>
+                  <span>Устройств: <span style={{ color: "#94A3B8" }}>{client.devices}</span></span>
+                  <span>Тикетов: <span style={{ color: client.tickets > 0 ? "#F59E0B" : "#94A3B8" }}>{client.tickets}</span></span>
+                </div>
+                <button onClick={() => onSelectClient(client.id)} className="w-full py-2 rounded text-xs font-semibold transition-colors" style={{ backgroundColor: isActive ? `${client.color}20` : client.color, color: isActive ? client.color : "#000", border: isActive ? `1px solid ${client.color}40` : "none" }}>
+                  {isActive ? "✓ Просматриваете сейчас" : "Войти как клиент"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="text-xs text-center" style={{ color: "#4A6070" }}>Режим просмотра не изменяет реальные данные — только фильтрует интерфейс</div>
+    </div>
+  );
+}
+
+// ─── Kanban Board ─────────────────────────────────────────────────────────────
+
+function KanbanBoard() {
+  const cols = [
+    { id: "new", label: "Новые", color: "#4A6070" },
+    { id: "in_progress", label: "В работе", color: "#38BDF8" },
+    { id: "awaiting", label: "Ожидание ответа", color: "#F59E0B" },
+    { id: "critical", label: "Критические", color: "#EF4444" },
+    { id: "closed", label: "Закрытые", color: "#22C55E" },
+  ] as const;
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="text-xs" style={{ ...MONO, color: "#4A6070" }}>Все клиенты · Kanban-доска</div>
+        <div className="flex gap-2 ml-auto text-xs" style={MONO}>
+          <span style={{ color: "#EF4444" }}>{KANBAN_TICKETS.critical.length} критических</span>
+          <span style={{ color: "#4A6070" }}>·</span>
+          <span style={{ color: "#38BDF8" }}>{KANBAN_TICKETS.in_progress.length} в работе</span>
+        </div>
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {cols.map(col => {
+          const tickets = KANBAN_TICKETS[col.id];
+          return (
+            <div key={col.id} className="flex-shrink-0 w-64">
+              <div className="flex items-center gap-2 mb-2 px-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.color }} />
+                <span className="text-xs font-semibold" style={{ color: col.color }}>{col.label}</span>
+                <span className="text-xs ml-auto px-1.5 py-0.5 rounded" style={{ ...MONO, backgroundColor: `${col.color}15`, color: col.color }}>{tickets.length}</span>
+              </div>
+              <div className="space-y-2">
+                {tickets.map(t => (
+                  <div key={t.id} className="p-3 rounded" style={{ backgroundColor: "#0C1117", border: t.priority === "critical" ? "1px solid #EF444440" : "1px solid rgba(255,255,255,0.065)" }}>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="text-xs" style={{ ...MONO, color: PRIORITY_CFG[t.priority]?.color ?? "#4A6070" }}>●</span>
+                      <span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{t.id}</span>
+                      {t.slaLeft > 0 && t.slaLeft < 60 && <span className="ml-auto text-xs" style={{ ...MONO, color: "#EF4444" }}><Clock size={9} className="inline" /> {t.slaLeft}м</span>}
+                    </div>
+                    <div className="text-xs text-foreground leading-snug mb-2">{t.title}</div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs" style={{ ...MONO, color: "#4A6070", fontSize: 10 }}>{t.client}</span>
+                      {"assignee" in t && t.assignee && <span className="text-xs px-1.5 py-0.5 rounded" style={{ ...MONO, backgroundColor: "#00D4A810", color: "#00D4A8", fontSize: 9 }}>{(t.assignee as string).split(" ")[0]}</span>}
+                    </div>
+                    {col.id === "in_progress" && (
+                      <div className="flex items-center gap-1.5 mt-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                        <button className="flex items-center gap-1 text-xs px-2 py-0.5 rounded" style={{ backgroundColor: "#22C55E10", color: "#22C55E" }}><PlayCircle size={9} />Таймер</button>
+                        <span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>0ч 00м</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {col.id !== "closed" && <button className="w-full py-2 rounded text-xs flex items-center justify-center gap-1" style={{ border: "1px dashed rgba(255,255,255,0.08)", color: "#4A6070" }}><Plus size={11} />Добавить</button>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── NOC View ─────────────────────────────────────────────────────────────────
+
+function NOCView() {
+  const [alerts, setAlerts] = useState(NOC_ALERTS);
+  const critical = alerts.filter(a => a.severity === "critical" && !a.acked && !a.suppressed);
+  const ack = (id: number) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, acked: true } : a));
+  const suppress = (id: number) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, suppressed: true } : a));
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-4 gap-4">
+        <div className="p-4 rounded" style={{ backgroundColor: "#EF444410", border: "1px solid #EF444430" }}><div className="text-xs mb-1" style={{ ...MONO, color: "#EF4444" }}>КРИТИЧЕСКИХ</div><div className="text-3xl font-bold" style={{ color: "#EF4444" }}>{alerts.filter(a => a.severity === "critical" && !a.acked).length}</div></div>
+        <div className="p-4 rounded" style={{ backgroundColor: "#F59E0B10", border: "1px solid #F59E0B30" }}><div className="text-xs mb-1" style={{ ...MONO, color: "#F59E0B" }}>ПРЕДУПРЕЖДЕНИЙ</div><div className="text-3xl font-bold" style={{ color: "#F59E0B" }}>{alerts.filter(a => a.severity === "warning" && !a.acked).length}</div></div>
+        <div className="p-4 rounded" style={{ backgroundColor: "#22C55E10", border: "1px solid #22C55E30" }}><div className="text-xs mb-1" style={{ ...MONO, color: "#22C55E" }}>ПОДТВЕРЖДЕНО</div><div className="text-3xl font-bold" style={{ color: "#22C55E" }}>{alerts.filter(a => a.acked).length}</div></div>
+        <div className="p-4 rounded" style={{ backgroundColor: "#4A607010", border: "1px solid #4A607030" }}><div className="text-xs mb-1" style={{ ...MONO, color: "#4A6070" }}>ЗАГЛУШЕНО</div><div className="text-3xl font-bold" style={{ color: "#4A6070" }}>{alerts.filter(a => a.suppressed).length}</div></div>
+      </div>
+
+      {critical.length > 0 && (
+        <div className="p-3 rounded flex items-center gap-2" style={{ backgroundColor: "#EF444410", border: "1px solid #EF444430" }}>
+          <Flame size={13} style={{ color: "#EF4444" }} /><span className="text-xs font-semibold" style={{ color: "#EF4444" }}>{critical.length} неподтверждённых критических алертов требуют немедленного внимания</span>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {alerts.map(alert => {
+          const sc = alert.severity === "critical" ? "#EF4444" : "#F59E0B";
+          const dim = alert.acked || alert.suppressed;
+          return (
+            <div key={alert.id} className="p-4 rounded flex items-center gap-4 transition-all" style={{ backgroundColor: "#0C1117", border: `1px solid ${dim ? "rgba(255,255,255,0.04)" : `${sc}30`}`, opacity: dim ? 0.5 : 1 }}>
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: dim ? "#4A6070" : sc, boxShadow: dim ? "none" : `0 0 8px ${sc}60` }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5"><span className="text-xs font-semibold" style={{ ...MONO, color: sc }}>{alert.client}</span><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>·</span><span className="text-xs" style={{ ...MONO, color: "#94A3B8" }}>{alert.device}</span></div>
+                <div className="text-sm text-foreground">{alert.message}</div>
+              </div>
+              <div className="text-xs flex-shrink-0" style={{ ...MONO, color: "#4A6070" }}>{alert.time}</div>
+              {alert.suppressed && <span className="text-xs px-2 py-0.5 rounded flex-shrink-0" style={{ ...MONO, backgroundColor: "#4A607015", color: "#4A6070" }}>Заглушено 2ч</span>}
+              {alert.acked && !alert.suppressed && <span className="text-xs px-2 py-0.5 rounded flex-shrink-0" style={{ ...MONO, backgroundColor: "#22C55E10", color: "#22C55E" }}>ACK</span>}
+              {!alert.acked && !alert.suppressed && (
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => ack(alert.id)} className="text-xs px-2.5 py-1 rounded" style={{ backgroundColor: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>ACK</button>
+                  <button onClick={() => suppress(alert.id)} className="text-xs px-2.5 py-1 rounded" style={{ backgroundColor: "#4A607015", color: "#4A6070", border: "1px solid #4A607030" }}>Заглушить 2ч</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Engineer KPI ─────────────────────────────────────────────────────────────
+
+function EngineerKPI() {
+  const days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  const sc = (s: string) => s === "ok" ? "#22C55E" : s === "warning" ? "#F59E0B" : "#EF4444";
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { label: "Открытых тикетов", value: ENGINEER_KPI.openTickets, color: "#F59E0B" },
+          { label: "Решено за 30 дней", value: ENGINEER_KPI.resolved30d, color: "#22C55E" },
+          { label: "MTTR", value: ENGINEER_KPI.mttr, color: "#00D4A8" },
+          { label: "Средний SLA", value: `${ENGINEER_KPI.avgSlaScore}%`, color: "#3B82F6" },
+        ].map(kpi => (
+          <div key={kpi.label} className="p-4 rounded" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
+            <div className="text-xs mb-2" style={{ ...MONO, color: "#4A6070" }}>{kpi.label.toUpperCase()}</div>
+            <div className="text-3xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-5">
+        <div className="p-4 rounded" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
+          <div className="text-xs uppercase tracking-widest mb-4" style={{ ...MONO, color: "#4A6070" }}>Решено тикетов за неделю</div>
+          <div className="flex items-end gap-2 h-24">
+            {ENGINEER_KPI.weeklyResolved.map((v, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full rounded-sm" style={{ height: `${(v / 12) * 80}px`, backgroundColor: "#00D4A8", minHeight: 4 }} />
+                <span className="text-xs" style={{ ...MONO, color: "#4A6070", fontSize: 9 }}>{days[i]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="p-4 rounded" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
+          <div className="text-xs uppercase tracking-widest mb-4" style={{ ...MONO, color: "#4A6070" }}>Карта здоровья клиентов</div>
+          <div className="space-y-2">
+            {ENGINEER_KPI.clients.map(c => (
+              <div key={c.name} className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: sc(c.status) }} />
+                <span className="text-xs flex-1 truncate" style={{ color: "#94A3B8" }}>{c.name}</span>
+                <span className="text-xs" style={{ ...MONO, color: c.openTickets > 0 ? "#F59E0B" : "#4A6070" }}>{c.openTickets} тик.</span>
+                <span className="text-xs" style={{ ...MONO, color: sc(c.status) }}>{c.sla}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Internal Wiki ────────────────────────────────────────────────────────────
+
+function InternalWiki() {
+  const [selected, setSelected] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+  const entry = selected !== null ? WIKI_ENTRIES.find(w => w.id === selected) : null;
+  const cats = [...new Set(WIKI_ENTRIES.map(w => w.category))];
+
+  const handleCopy = () => { setCopied(true); setTimeout(() => setCopied(false), 2000); };
+
+  return (
+    <div className="flex gap-4 h-full">
+      <div className="flex-1 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex gap-2 flex-wrap">{cats.map(c => <span key={c} className="text-xs px-2 py-0.5 rounded" style={{ ...MONO, backgroundColor: "#111C24", color: "#4A6070" }}>{c}</span>)}</div>
+          <button className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded" style={{ backgroundColor: "#00D4A8", color: "#000" }}><Plus size={11} />Добавить статью</button>
+        </div>
+        <div className="space-y-2">
+          {WIKI_ENTRIES.map(w => (
+            <div key={w.id} className="p-4 rounded transition-colors cursor-pointer hover:border-[rgba(255,255,255,0.15)]" style={{ backgroundColor: selected === w.id ? "#00D4A808" : "#0C1117", border: `1px solid ${selected === w.id ? "rgba(0,212,168,0.35)" : "rgba(255,255,255,0.065)"}` }} onClick={() => setSelected(w.id === selected ? null : w.id)}>
+              <div className="flex items-start gap-3">
+                <StickyNote size={13} style={{ color: "#4A6070", flexShrink: 0, marginTop: 2 }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-foreground mb-1">{w.title}</div>
+                  <div className="flex items-center gap-3 flex-wrap text-xs" style={{ ...MONO, color: "#4A6070" }}>
+                    <span style={{ color: "#3B82F6" }}>{w.category}</span>
+                    {w.tags.map(t => <span key={t} className="px-1.5 py-0.5 rounded" style={{ backgroundColor: "#111C24" }}>{t}</span>)}
+                    <span className="ml-auto">{w.views} просмотров · {w.updated}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {entry && (
+        <div className="w-80 flex-shrink-0">
+          <div className="p-4 rounded sticky top-0" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
+            <div className="flex items-center justify-between mb-3"><span className="text-xs font-semibold text-foreground">{entry.title}</span><button onClick={() => setSelected(null)} style={{ color: "#4A6070" }}><X size={13} /></button></div>
+            <div className="text-xs mb-2" style={{ ...MONO, color: "#4A6070" }}>СНИППЕТ</div>
+            <div className="relative p-3 rounded" style={{ backgroundColor: "#06090C", border: "1px solid rgba(255,255,255,0.065)" }}>
+              <pre className="text-xs overflow-x-auto whitespace-pre-wrap" style={{ color: "#00D4A8", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6 }}>{entry.snippet}</pre>
+              <button onClick={handleCopy} className="absolute top-2 right-2 flex items-center gap-1 text-xs px-2 py-0.5 rounded" style={{ backgroundColor: "#0C1117", color: copied ? "#22C55E" : "#4A6070" }}>{copied ? <><Check size={9} />Скопировано</> : <><Copy size={9} />Копировать</>}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Team Chat ────────────────────────────────────────────────────────────────
+
+function TeamChat() {
+  const [input, setInput] = useState("");
+  const [msgs, setMsgs] = useState(TEAM_MESSAGES);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+
+  const send = () => {
+    if (!input.trim()) return;
+    setMsgs(m => [...m, { id: m.length + 1, from: "Иванов И.А.", initials: "ИИ", color: "#00D4A8", time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }), text: input }]);
+    setInput("");
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="text-xs uppercase tracking-widest mb-4" style={{ ...MONO, color: "#4A6070" }}>Командный чат инженеров · #general</div>
+      <div className="flex-1 overflow-auto space-y-3 mb-4">
+        {msgs.map(msg => {
+          const isMe = msg.from === "Иванов И.А.";
+          return (
+            <div key={msg.id} className={`flex gap-3 ${isMe ? "flex-row-reverse" : ""}`}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor: `${msg.color}18`, color: msg.color }}>{msg.initials}</div>
+              <div className={`flex flex-col gap-0.5 max-w-md ${isMe ? "items-end" : "items-start"}`}>
+                <div className="flex items-center gap-2" style={{ flexDirection: isMe ? "row-reverse" : "row" }}><span className="text-xs font-medium text-foreground">{msg.from}</span><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{msg.time}</span></div>
+                <div className="px-3 py-2 rounded text-sm" style={{ backgroundColor: isMe ? "#00D4A812" : "#111C24", border: `1px solid ${isMe ? "#00D4A830" : "rgba(255,255,255,0.065)"}`, color: "#C4D2DC" }}>{msg.text}</div>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+      <div className="flex gap-2 flex-shrink-0">
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Сообщение команде... (Enter — отправить)" className="flex-1 rounded text-sm px-3 py-2 outline-none" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }} />
+        <button onClick={send} disabled={!input.trim()} className="px-3 py-2 rounded" style={{ backgroundColor: input.trim() ? "#00D4A8" : "#00D4A820", color: input.trim() ? "#000" : "#4A6070" }}><Send size={13} /></button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Client Context Switcher (Header) ─────────────────────────────────────────
+
+function ClientContextSwitcher({ currentClientId, onSwitch }: { currentClientId: string | null; onSwitch: (id: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const recent = CLIENTS.slice(0, 3);
+  const filtered = search ? CLIENTS.filter(c => c.name.toLowerCase().includes(search.toLowerCase())) : recent;
+  const current = currentClientId ? CLIENTS.find(c => c.id === currentClientId) : null;
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors" style={{ backgroundColor: open ? "#00D4A815" : "#0C1117", border: `1px solid ${open ? "#00D4A840" : "rgba(255,255,255,0.065)"}`, color: current ? "#F59E0B" : "#4A6070" }}>
+        <ArrowRightLeft size={11} />
+        <span style={MONO}>{current ? current.name : "Выбрать клиента"}</span>
+        <ChevronDown size={10} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+      </button>
+      {open && (
+        <div className="absolute top-full right-0 mt-1 w-72 rounded z-50" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}>
+          <div className="p-2"><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск клиента..." autoFocus className="w-full rounded text-xs px-3 py-1.5 outline-none" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }} /></div>
+          {!search && <div className="px-3 pb-1 text-xs" style={{ ...MONO, color: "#4A6070" }}>ПОСЛЕДНИЕ</div>}
+          <div className="max-h-56 overflow-auto pb-2">
+            {!currentClientId ? null : (
+              <button className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left hover:bg-muted" onClick={() => { onSwitch(null); setOpen(false); }}>
+                <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#00D4A818", color: "#00D4A8", ...MONO, fontSize: 8 }}>ИИ</div>
+                <span style={{ color: "#00D4A8" }}>Вернуться как инженер</span>
+              </button>
+            )}
+            {filtered.map(c => (
+              <button key={c.id} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left hover:bg-muted" style={{ backgroundColor: currentClientId === c.id ? "#F59E0B10" : undefined }} onClick={() => { onSwitch(c.id); setOpen(false); }}>
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor: `${c.color}20`, color: c.color, fontSize: 9 }}>{c.initials}</div>
+                <div className="flex-1 min-w-0"><div className="truncate" style={{ color: "#C4D2DC" }}>{c.name}</div><div style={{ color: "#4A6070" }}>{c.industry} · {c.lastVisit}</div></div>
+                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.status === "ok" ? "#22C55E" : c.status === "warning" ? "#F59E0B" : "#EF4444" }} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
+    </div>
+  );
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 const NAV_MAIN = [
@@ -1264,32 +1708,76 @@ const NAV_EXT = [
   { id: "audit", label: "Журнал аудита", icon: History },
 ] as const;
 
-function Sidebar({ view, setView }: { view: string; setView: (v: string) => void }) {
+const NAV_ENGINEER = [
+  { id: "kanban", label: "Kanban", icon: LayoutGrid },
+  { id: "noc", label: "NOC / Алерты", icon: BellRing, badge: NOC_ALERTS.filter(a=>!a.acked&&!a.suppressed).length },
+  { id: "engkpi", label: "Мои показатели", icon: Gauge },
+  { id: "wiki", label: "Wiki / Сценарии", icon: BookMarked },
+  { id: "teamchat", label: "Чат команды", icon: MessageSquare },
+] as const;
+
+function Sidebar({ view, setView, role, currentClientId, onSwitchAccount }: { view: string; setView: (v: string) => void; role: "engineer"|"client"; currentClientId: string|null; onSwitchAccount: () => void }) {
   const navView = ["fullchat","software"].includes(view) ? "servicedesk" : view === "account" ? "" : view;
+  const isEngineer = role === "engineer";
+  const contextClient = currentClientId ? CLIENTS.find(c => c.id === currentClientId) : null;
+
   const NavBtn = ({ id, label, icon: Icon, badge }: { id: string; label: string; icon: React.ElementType; badge?: number }) => {
     const active = navView === id;
-    return <button onClick={() => setView(id)} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-sm transition-all" style={{ color:active?"#00D4A8":"#4A6070", backgroundColor:active?"#00D4A810":"transparent", borderLeft:active?"2px solid #00D4A8":"2px solid transparent", paddingLeft:active?10:12 }}><Icon size={14}/><span className="flex-1 text-left">{label}</span>{badge&&<span className="text-xs px-1.5 py-0.5 rounded" style={{ ...MONO, backgroundColor:"#EF444420", color:"#EF4444" }}>{badge}</span>}</button>;
+    return <button onClick={() => setView(id)} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-sm transition-all" style={{ color:active?"#00D4A8":"#4A6070", backgroundColor:active?"#00D4A810":"transparent", borderLeft:active?"2px solid #00D4A8":"2px solid transparent", paddingLeft:active?10:12 }}><Icon size={14}/><span className="flex-1 text-left">{label}</span>{!!badge&&badge>0&&<span className="text-xs px-1.5 py-0.5 rounded" style={{ ...MONO, backgroundColor:"#EF444420", color:"#EF4444" }}>{badge}</span>}</button>;
   };
+
   return (
     <div className="w-52 flex-shrink-0 flex flex-col" style={{ backgroundColor:"#04070A", borderRight:"1px solid rgba(255,255,255,0.05)" }}>
+      {/* Logo */}
       <div className="px-4 pt-5 pb-4" style={{ borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
-        <div className="flex items-center gap-2.5"><div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor:"#00D4A8" }}><Zap size={13} style={{ color:"#000" }}/></div><div><div className="text-sm font-semibold text-foreground">TechCore</div><div className="text-xs" style={{ ...MONO, color:"#4A6070" }}>системная интеграция</div></div></div>
+        <div className="flex items-center gap-2.5"><div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor:"#00D4A8" }}><Zap size={13} style={{ color:"#000" }}/></div><div><div className="text-sm font-semibold text-foreground">TechCore</div><div className="text-xs" style={{ ...MONO, color:"#4A6070" }}>{isEngineer?"инженерный портал":"системная интеграция"}</div></div></div>
       </div>
+
+      {/* Context client or org */}
       <div className="px-3 py-3" style={{ borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
-        <div className="flex items-center gap-2 px-2 py-2 rounded" style={{ backgroundColor:"#0C1117" }}><Building2 size={11} style={{ color:"#4A6070", flexShrink:0 }}/><div className="min-w-0"><div className="text-xs text-foreground truncate">ООО «АльфаТрейд»</div><div className="text-xs" style={{ ...MONO, color:"#4A6070", fontSize:10 }}>ID: ORG-0071</div></div></div>
+        {contextClient ? (
+          <div className="flex items-center gap-2 px-2 py-2 rounded" style={{ backgroundColor:"#F59E0B10", border:"1px solid #F59E0B30" }}>
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor:`${contextClient.color}20`, color:contextClient.color, fontSize:8 }}>{contextClient.initials}</div>
+            <div className="min-w-0 flex-1"><div className="text-xs text-foreground truncate">{contextClient.name}</div><div className="text-xs" style={{ ...MONO, color:"#F59E0B", fontSize:10 }}>Режим клиента</div></div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-2 py-2 rounded" style={{ backgroundColor:"#0C1117" }}><Building2 size={11} style={{ color:"#4A6070", flexShrink:0 }}/><div className="min-w-0"><div className="text-xs text-foreground truncate">{isEngineer?"TechCore Systems":"ООО «АльфаТрейд»"}</div><div className="text-xs" style={{ ...MONO, color:"#4A6070", fontSize:10 }}>{isEngineer?"Инженерный режим":"ID: ORG-0071"}</div></div></div>
+        )}
       </div>
+
+      {/* Navigation */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-auto">
         {NAV_MAIN.map(item=><NavBtn key={item.id} {...item}/>)}
         <div className="my-2 mx-2" style={{ height:1, backgroundColor:"rgba(255,255,255,0.05)" }}/>
         <div className="text-xs px-3 py-1" style={{ ...MONO, color:"#2A3A44" }}>РАСШИРЕННЫЕ</div>
         {NAV_EXT.map(item=><NavBtn key={item.id} {...item}/>)}
+
+        {/* Engineer-only section */}
+        {isEngineer && !currentClientId && (<>
+          <div className="my-2 mx-2" style={{ height:1, backgroundColor:"rgba(255,255,255,0.05)" }}/>
+          <div className="text-xs px-3 py-1 flex items-center gap-1.5" style={{ ...MONO, color:"#2A3A44" }}><Wrench size={9}/>ИНЖЕНЕРНЫЙ</div>
+          {NAV_ENGINEER.map(item=><NavBtn key={item.id} {...item}/>)}
+        </>)}
       </nav>
-      <div className="px-3 py-3" style={{ borderTop:"1px solid rgba(255,255,255,0.05)" }}>
+
+      {/* Profile + Switch Account */}
+      <div className="px-3 py-3 space-y-1.5" style={{ borderTop:"1px solid rgba(255,255,255,0.05)" }}>
         <button onClick={() => setView("account")} className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-muted transition-colors" style={{ backgroundColor:view==="account"?"#00D4A810":"transparent" }}>
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor:"#00D4A818", color:"#00D4A8" }}>ПА</div>
-          <div className="flex-1 min-w-0 text-left"><div className="text-xs text-foreground truncate">Петров А.С.</div><div className="text-xs" style={{ ...MONO, color:"#4A6070", fontSize:10 }}>Администратор</div></div>
+          {isEngineer
+            ? <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor:"#00D4A818", color:"#00D4A8" }}>ИИ</div>
+            : <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor:"#8B5CF618", color:"#8B5CF6" }}>ПА</div>}
+          <div className="flex-1 min-w-0 text-left">
+            <div className="text-xs text-foreground truncate">{isEngineer?"Иванов И.А.":"Петров А.С."}</div>
+            <div className="text-xs" style={{ ...MONO, color:"#4A6070", fontSize:10 }}>{isEngineer?"Инженер L2":"Администратор"}</div>
+          </div>
           <Settings size={12} style={{ color:"#4A6070" }}/>
         </button>
+        {isEngineer && (
+          <button onClick={onSwitchAccount} className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors" style={{ color:"#4A6070" }}>
+            <ArrowRightLeft size={11}/><span>Сменить аккаунт</span>
+            {currentClientId && <span className="ml-auto w-1.5 h-1.5 rounded-full" style={{ backgroundColor:"#F59E0B" }}/>}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1302,6 +1790,8 @@ const PAGE_TITLES: Record<string,string> = {
   infra:"Инфраструктура", finance:"Финансы", fullchat:"Чат по заявке",
   account:"Мой аккаунт", sla:"SLA / Мониторинг доступности", billing:"Тариф и оплата",
   api:"API & Интеграции", audit:"Журнал аудита", software:"Программное обеспечение",
+  kanban:"Kanban — все клиенты", noc:"NOC / Активные алерты", engkpi:"Мои показатели",
+  wiki:"Внутренняя Wiki / Сценарии", teamchat:"Чат команды", switchaccount:"Смена аккаунта",
 };
 
 export default function App() {
@@ -1310,6 +1800,9 @@ export default function App() {
   const [selectedTicketId,setSelectedTicketId]=useState<string|null>(null);
   const [selectedDeviceId,setSelectedDeviceId]=useState<string|null>(null);
   const [softwareName,setSoftwareName]=useState<string|null>(null);
+  // Engineer role & impersonation
+  const [role,setRole]=useState<"engineer"|"client">("engineer");
+  const [currentClientId,setCurrentClientId]=useState<string|null>(null);
 
   const handleSetView=(v:string)=>{
     if(v!=="servicedesk")setSelectedTicketId(null);
@@ -1322,22 +1815,38 @@ export default function App() {
   const navigateToSoftware=(name:string)=>{setSoftwareName(name);setView("software");};
   const openChat=(ticketId:string)=>{setChatTicketId(ticketId);setView("fullchat");};
 
+  const handleSwitchClient=(id:string|null)=>{
+    setCurrentClientId(id);
+    if(id){setRole("client");}else{setRole("engineer");}
+    setView("dashboard");
+  };
+  const handleExitImpersonation=()=>{ setCurrentClientId(null); setRole("engineer"); setView("dashboard"); };
+
   const pageTitle=view==="fullchat"?`${PAGE_TITLES.fullchat} · ${chatTicketId}`:view==="software"&&softwareName?softwareName:PAGE_TITLES[view]??view;
+  const contextClient=currentClientId?CLIENTS.find(c=>c.id===currentClientId):null;
+  const headerSubtitle=contextClient?`${contextClient.name} · Режим просмотра`:"ООО «АльфаТрейд» · 16.07.2024";
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden" style={{ fontFamily:"'Inter', -apple-system, sans-serif" }}>
-      <Sidebar view={view} setView={handleSetView}/>
+      <Sidebar view={view} setView={handleSetView} role={role} currentClientId={currentClientId} onSwitchAccount={()=>setView("switchaccount")}/>
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Impersonation banner */}
+        {currentClientId && contextClient && <ImpersonationBanner clientName={contextClient.name} onExit={handleExitImpersonation}/>}
+
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-3 flex-shrink-0" style={{ backgroundColor:"#04070A", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
-          <div><h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1><div className="text-xs mt-0.5" style={{ ...MONO, color:"#4A6070" }}>ООО «АльфаТрейд» · 16.07.2024</div></div>
+          <div><h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1><div className="text-xs mt-0.5" style={{ ...MONO, color: currentClientId?"#F59E0B":"#4A6070" }}>{headerSubtitle}</div></div>
           <div className="flex items-center gap-2">
-            <button className="relative p-2 rounded hover:bg-muted" style={{ color:"#4A6070" }}><Bell size={14}/><span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ backgroundColor:"#EF4444" }}/></button>
+            {role==="engineer"&&<ClientContextSwitcher currentClientId={currentClientId} onSwitch={handleSwitchClient}/>}
+            <button className="relative p-2 rounded hover:bg-muted" style={{ color:"#4A6070" }}><Bell size={14}/>{NOC_ALERTS.filter(a=>!a.acked&&!a.suppressed).length>0&&<span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ backgroundColor:"#EF4444" }}/>}</button>
             <button className="p-2 rounded hover:bg-muted" style={{ color:"#4A6070" }}><RefreshCw size={13}/></button>
             <div className="w-px h-4 bg-border mx-1"/>
             <span className="text-xs" style={{ ...MONO, color:"#4A6070" }}>Обновлено: 14:22</span>
           </div>
         </div>
-        <div className={`flex-1 overflow-auto${view==="fullchat"?"":" p-6"}`}>
+
+        {/* Content */}
+        <div className={`flex-1 overflow-auto${view==="fullchat"||view==="teamchat"?"":" p-6"}`}>
           {view==="dashboard"&&<Dashboard onNavigateToTicket={navigateToTicket} onNavigateToDevice={navigateToDevice}/>}
           {view==="servicedesk"&&<ServiceDesk onOpenChat={openChat} initialTicket={selectedTicketId}/>}
           {view==="docs"&&<Docs/>}
@@ -1350,6 +1859,13 @@ export default function App() {
           {view==="api"&&<APIPage/>}
           {view==="audit"&&<AuditPage/>}
           {view==="fullchat"&&<div className="flex flex-col h-full overflow-hidden"><FullChat ticketId={chatTicketId} onBack={() => setView("servicedesk")}/></div>}
+          {/* Engineer-only views */}
+          {view==="kanban"&&role==="engineer"&&<KanbanBoard/>}
+          {view==="noc"&&role==="engineer"&&<NOCView/>}
+          {view==="engkpi"&&role==="engineer"&&<EngineerKPI/>}
+          {view==="wiki"&&role==="engineer"&&<InternalWiki/>}
+          {view==="teamchat"&&role==="engineer"&&<div className="flex flex-col h-full p-6"><TeamChat/></div>}
+          {view==="switchaccount"&&<SwitchAccountPage currentClientId={currentClientId} onSelectClient={id=>handleSwitchClient(id)} onSelectEngineer={()=>{handleSwitchClient(null);setView("dashboard");}}/>}
         </div>
       </div>
     </div>
