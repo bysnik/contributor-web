@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useId } from "react";
 import {
   LayoutDashboard, LifeBuoy, BookOpen, CreditCard,
   AlertCircle, Clock, Plus, Search, Paperclip, Send,
@@ -13,7 +13,8 @@ import {
   ChevronUp, Network, Cpu, BellRing, BookMarked,
   MessageSquare, Wrench, Timer, LogOut,
   ArrowRightLeft, Gauge, PlayCircle, StopCircle,
-  Flame, GitMerge, StickyNote, LayoutGrid,
+  Flame, GitMerge, StickyNote, LayoutGrid, Sun, Moon,
+  Hash, Filter, TicketCheck,
 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
@@ -291,12 +292,13 @@ function SLATimer({ minutes }: { minutes: number }) {
 }
 
 function Sparkline({ data, color = "#00D4A8", height = 36 }: { data: number[]; color?: string; height?: number }) {
-  const uid = color.replace("#", "") + height;
+  const uid = useId().replace(/:/g, "_");
+  const gradId = `sg_${uid}`;
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data.map((v, i) => ({ v, i }))} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
-        <defs><linearGradient id={`sg${uid}`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.3} /><stop offset="95%" stopColor={color} stopOpacity={0} /></linearGradient></defs>
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill={`url(#sg${uid})`} dot={false} isAnimationActive={false} />
+        <defs><linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.3} /><stop offset="95%" stopColor={color} stopOpacity={0} /></linearGradient></defs>
+        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill={`url(#${gradId})`} dot={false} isAnimationActive={false} />
         <Tooltip contentStyle={{ background: "#0C1117", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2, fontSize: 10, fontFamily: "'JetBrains Mono', monospace", padding: "2px 8px" }} itemStyle={{ color }} formatter={(v: number) => [`${v}%`, ""]} labelFormatter={() => ""} />
       </AreaChart>
     </ResponsiveContainer>
@@ -458,45 +460,102 @@ function FullChat({ ticketId, onBack }: { ticketId: string; onBack: () => void }
   const ticket = TICKETS.find(t => t.id === ticketId);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
+  const [sideTab, setSideTab] = useState<"attachments"|"links"|"participants">("attachments");
+  const [showSide, setShowSide] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, []);
   const handleSend = () => { if (!input.trim()) return; setInput(""); setTyping(true); setTimeout(() => setTyping(false), 2200); };
   const ac = (from: string) => from === "engineer" ? { bg: "#00D4A818", color: "#00D4A8" } : from === "system" ? { bg: "#38BDF820", color: "#38BDF8" } : { bg: "#8B5CF620", color: "#8B5CF6" };
 
+  const attachments = [
+    { name: "disk_cleanup_log_2024-07-16.txt", size: "12 КБ", time: "09:41" },
+    { name: "srv-db-01_iostat.csv", size: "4.2 КБ", time: "09:35" },
+  ];
+  const links = [
+    { url: "https://zabbix.techcore.ru/problem/1248", label: "Zabbix Alert #1248" },
+    { url: "https://wiki.techcore.ru/postgresql/wal", label: "Wiki: PostgreSQL WAL" },
+  ];
+  const participants = [
+    { name: "Петров А.С.", role: "Клиент", initials: "ПА", color: "#8B5CF6", online: true },
+    { name: "Иванов И.А.", role: "Инженер L2", initials: "ИИ", color: "#00D4A8", online: true },
+    { name: "Ковалёва М.Н.", role: "Клиент", initials: "КМ", color: "#F59E0B", online: false },
+  ];
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-6 py-3 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.065)" }}>
-        <button onClick={onBack} className="flex items-center gap-1.5 text-xs hover:text-foreground transition-colors" style={{ color: "#4A6070" }}><ArrowLeft size={13} />К тикету</button>
-        <div className="w-px h-4 bg-border" />
-        {ticket && (<><span className="text-xs font-semibold" style={{ ...MONO, color: "#00D4A8" }}>{ticket.id}</span><span className="text-xs text-foreground truncate flex-1">{ticket.title}</span><TicketBadge status={ticket.status} /></>)}
-      </div>
-      <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
-        {CHAT_MESSAGES.map(msg => {
-          const a = ac(msg.from);
-          if (msg.from === "system") return <div key={msg.id} className="flex justify-center"><div className="flex items-center gap-2 px-3 py-1.5 rounded text-xs" style={{ ...MONO, backgroundColor: "#38BDF810", color: "#38BDF8", border: "1px solid #38BDF820" }}><Paperclip size={10} />{msg.text}</div></div>;
-          const isClient = msg.from === "client";
-          return (
-            <div key={msg.id} className={`flex gap-3 ${isClient ? "flex-row-reverse" : ""}`}>
-              <div className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: a.bg, color: a.color }}>{msg.avatar}</div>
-              <div className={`max-w-xl flex flex-col gap-1 ${isClient ? "items-end" : "items-start"}`}>
-                <div className="flex items-center gap-2" style={{ flexDirection: isClient ? "row-reverse" : "row" }}><span className="text-xs font-medium text-foreground">{msg.author}</span><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{msg.time}</span></div>
-                <div className="px-4 py-2.5 rounded text-sm leading-relaxed" style={{ backgroundColor: isClient ? "#00D4A812" : "#111C24", border: `1px solid ${isClient ? "#00D4A830" : "rgba(255,255,255,0.065)"}`, color: "#C4D2DC" }}>{msg.text}</div>
+    <div className="flex h-full">
+      {/* Main chat */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex items-center gap-3 px-6 py-3 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.065)" }}>
+          <button onClick={onBack} className="flex items-center gap-1.5 text-xs hover:text-foreground transition-colors" style={{ color: "#4A6070" }}><ArrowLeft size={13} />К тикету</button>
+          <div className="w-px h-4 bg-border" />
+          {ticket && (<><span className="text-xs font-semibold" style={{ ...MONO, color: "#00D4A8" }}>{ticket.id}</span><span className="text-xs text-foreground truncate flex-1">{ticket.title}</span><TicketBadge status={ticket.status} /></>)}
+          <button onClick={() => setShowSide(s => !s)} className="ml-2 p-1.5 rounded hover:bg-muted" style={{ color: showSide ? "#00D4A8" : "#4A6070" }}><Layers size={13} /></button>
+        </div>
+        <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+          {CHAT_MESSAGES.map(msg => {
+            const a = ac(msg.from);
+            if (msg.from === "system") return <div key={msg.id} className="flex justify-center"><div className="flex items-center gap-2 px-3 py-1.5 rounded text-xs" style={{ ...MONO, backgroundColor: "#38BDF810", color: "#38BDF8", border: "1px solid #38BDF820" }}><Paperclip size={10} />{msg.text}</div></div>;
+            const isClient = msg.from === "client";
+            return (
+              <div key={msg.id} className={`flex gap-3 ${isClient ? "flex-row-reverse" : ""}`}>
+                <div className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: a.bg, color: a.color }}>{msg.avatar}</div>
+                <div className={`max-w-xl flex flex-col gap-1 ${isClient ? "items-end" : "items-start"}`}>
+                  <div className="flex items-center gap-2" style={{ flexDirection: isClient ? "row-reverse" : "row" }}><span className="text-xs font-medium text-foreground">{msg.author}</span><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{msg.time}</span></div>
+                  <div className="px-4 py-2.5 rounded text-sm leading-relaxed" style={{ backgroundColor: isClient ? "#00D4A812" : "#111C24", border: `1px solid ${isClient ? "#00D4A830" : "rgba(255,255,255,0.065)"}`, color: "#C4D2DC" }}>{msg.text}</div>
+                </div>
               </div>
+            );
+          })}
+          {typing && <div className="flex gap-3"><div className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: "#00D4A818", color: "#00D4A8" }}>ИИ</div><div className="px-4 py-3 rounded flex items-center gap-1.5" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)" }}>{[0,1,2].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#00D4A8", display: "inline-block", animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }} />)}</div></div>}
+          <div ref={bottomRef} />
+        </div>
+        <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.065)" }}>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1 rounded overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.065)", backgroundColor: "#0C1117" }}>
+              <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }} rows={3} placeholder="Введите сообщение... (Enter — отправить)" className="w-full px-4 py-3 text-sm outline-none resize-none" style={{ backgroundColor: "transparent", color: "#C4D2DC", fontFamily: "inherit" }} />
+              <div className="flex items-center gap-2 px-3 pb-2"><button className="text-muted-foreground hover:text-foreground p-1"><Paperclip size={13} /></button><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>Прикрепить файл</span></div>
             </div>
-          );
-        })}
-        {typing && <div className="flex gap-3"><div className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: "#00D4A818", color: "#00D4A8" }}>ИИ</div><div className="px-4 py-3 rounded flex items-center gap-1.5" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)" }}>{[0,1,2].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#00D4A8", display: "inline-block", animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }} />)}</div></div>}
-        <div ref={bottomRef} />
-      </div>
-      <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.065)" }}>
-        <div className="flex gap-2 items-end">
-          <div className="flex-1 rounded overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.065)", backgroundColor: "#0C1117" }}>
-            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }} rows={3} placeholder="Введите сообщение... (Enter — отправить)" className="w-full px-4 py-3 text-sm outline-none resize-none" style={{ backgroundColor: "transparent", color: "#C4D2DC", fontFamily: "inherit" }} />
-            <div className="flex items-center gap-2 px-3 pb-2"><button className="text-muted-foreground hover:text-foreground p-1"><Paperclip size={13} /></button><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>Прикрепить файл</span></div>
+            <button onClick={handleSend} disabled={!input.trim()} className="px-4 py-3 rounded flex items-center gap-2 text-sm font-medium flex-shrink-0" style={{ backgroundColor: input.trim() ? "#00D4A8" : "#00D4A820", color: input.trim() ? "#000" : "#4A6070" }}><Send size={13} />Отправить</button>
           </div>
-          <button onClick={handleSend} disabled={!input.trim()} className="px-4 py-3 rounded flex items-center gap-2 text-sm font-medium flex-shrink-0" style={{ backgroundColor: input.trim() ? "#00D4A8" : "#00D4A820", color: input.trim() ? "#000" : "#4A6070" }}><Send size={13} />Отправить</button>
         </div>
       </div>
+
+      {/* Right sidebar */}
+      {showSide && (
+        <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden" style={{ borderLeft: "1px solid rgba(255,255,255,0.065)" }}>
+          <div className="flex border-b border-border flex-shrink-0">
+            {([["attachments","Файлы"],["links","Ссылки"],["participants","Участники"]] as [string,string][]).map(([id,label]) => (
+              <button key={id} onClick={() => setSideTab(id as typeof sideTab)} className="flex-1 py-2.5 text-xs transition-colors border-b-2" style={{ borderColor: sideTab === id ? "#00D4A8" : "transparent", color: sideTab === id ? "#00D4A8" : "#4A6070", ...MONO }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-auto p-4 space-y-3">
+            {sideTab === "attachments" && attachments.map((f, i) => (
+              <div key={i} className="flex items-center gap-3 p-2.5 rounded" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
+                <FileText size={13} style={{ color: "#4A6070", flexShrink: 0 }} />
+                <div className="flex-1 min-w-0"><div className="text-xs text-foreground truncate">{f.name}</div><div className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{f.size} · {f.time}</div></div>
+                <button style={{ color: "#4A6070" }}><Download size={11} /></button>
+              </div>
+            ))}
+            {sideTab === "links" && links.map((l, i) => (
+              <div key={i} className="flex items-start gap-2 p-2.5 rounded" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
+                <ExternalLink size={11} style={{ color: "#4A6070", flexShrink: 0, marginTop: 2 }} />
+                <span className="text-xs" style={{ color: "#00D4A8" }}>{l.label}</span>
+              </div>
+            ))}
+            {sideTab === "participants" && participants.map((p, i) => (
+              <div key={i} className="flex items-center gap-2.5">
+                <div className="relative flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: `${p.color}18`, color: p.color, fontSize: 9 }}>{p.initials}</div>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border" style={{ backgroundColor: p.online ? "#22C55E" : "#4A6070", borderColor: "#06090C" }} />
+                </div>
+                <div><div className="text-xs text-foreground">{p.name}</div><div className="text-xs" style={{ ...MONO, color: "#4A6070", fontSize: 9 }}>{p.role}</div></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <style>{`@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}`}</style>
     </div>
   );
@@ -995,9 +1054,9 @@ function Infra({ initialDevice, onNavigateToDevice }: { initialDevice?: string|n
                       <div className="text-xs mb-3" style={{ ...MONO, color:"#4A6070" }}>НАГРУЗКА CPU — ПОСЛЕДНИЕ 12 ТОЧЕК</div>
                       <ResponsiveContainer width="100%" height={72}>
                         <AreaChart data={device.cpuHistory.map((v,i)=>({v,i}))} margin={{top:4,right:4,bottom:4,left:4}}>
-                          <defs><linearGradient id="cpuG" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={device.cpu>65?"#F59E0B":"#00D4A8"} stopOpacity={0.3}/><stop offset="95%" stopColor={device.cpu>65?"#F59E0B":"#00D4A8"} stopOpacity={0}/></linearGradient></defs>
+                          <defs><linearGradient id={`cpuG_${device.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={device.cpu>65?"#F59E0B":"#00D4A8"} stopOpacity={0.3}/><stop offset="95%" stopColor={device.cpu>65?"#F59E0B":"#00D4A8"} stopOpacity={0}/></linearGradient></defs>
                           <XAxis dataKey="i" hide/><Tooltip contentStyle={{ background:"#0C1117", border:"1px solid rgba(255,255,255,0.08)", borderRadius:2, fontSize:10, fontFamily:"'JetBrains Mono',monospace" }} formatter={(v:number)=>[`${v}%`,"CPU"]} labelFormatter={()=>""}/>
-                          <Area type="monotone" dataKey="v" stroke={device.cpu>65?"#F59E0B":"#00D4A8"} strokeWidth={1.5} fill="url(#cpuG)" dot={false} isAnimationActive={false}/>
+                          <Area type="monotone" dataKey="v" stroke={device.cpu>65?"#F59E0B":"#00D4A8"} strokeWidth={1.5} fill={`url(#cpuG_${device.id})`} dot={false} isAnimationActive={false}/>
                         </AreaChart>
                       </ResponsiveContainer>
                     </Card>
@@ -1252,13 +1311,61 @@ function AuditPage() {
 
 // ─── Engineer Data ────────────────────────────────────────────────────────────
 
-const CLIENTS = [
-  { id: "alfatrade", name: "ООО «АльфаТрейд»", industry: "Торговля", devices: 5, tickets: 3, status: "ok", initials: "АТ", color: "#00D4A8", lastVisit: "Сегодня" },
-  { id: "medclinic", name: "Клиника «МедЦентр»", industry: "Медицина", devices: 12, tickets: 1, status: "warning", initials: "МЦ", color: "#F59E0B", lastVisit: "Вчера" },
-  { id: "school42", name: "Школа №42 г. Москвы", industry: "Образование", devices: 34, tickets: 7, status: "critical", initials: "Ш4", color: "#EF4444", lastVisit: "16.07.2024" },
-  { id: "promtech", name: "ПромТех ООО", industry: "Производство", devices: 18, tickets: 0, status: "ok", initials: "ПТ", color: "#3B82F6", lastVisit: "15.07.2024" },
-  { id: "megabank", name: "МегаБанк НКО", industry: "Финансы", devices: 8, tickets: 2, status: "ok", initials: "МБ", color: "#8B5CF6", lastVisit: "14.07.2024" },
-  { id: "autopark", name: "АвтоПарк Логистик", industry: "Логистика", devices: 22, tickets: 0, status: "ok", initials: "АЛ", color: "#22C55E", lastVisit: "10.07.2024" },
+const TIERS = {
+  Basic: { color: "#6B7280", label: "Basic", icon: "★", desc: "1 сервер, до 5 ВМ, до 5 пользователей" },
+  Standard: { color: "#22C55E", label: "Standard", icon: "★★", desc: "До 5 серверов, до 20 ВМ, до 20 пользователей" },
+  Premium: { color: "#3B82F6", label: "Premium", icon: "★★★", desc: "До 20 серверов, до 100 ВМ, неограниченно пользователей" },
+  Enterprise: { color: "#8B5CF6", label: "Enterprise", icon: "★★★★", desc: "Без ограничений, выделенный инженер, SLA 99.9%" },
+};
+
+const CLIENTS: Array<{ id: string; name: string; industry: string; tier: keyof typeof TIERS; devices: number; tickets: number; status: string; initials: string; color: string; lastVisit: string; alerts: number; description: string }> = [
+  { id: "oakwood", name: "Oakwood High School", industry: "Образование", tier: "Basic", devices: 1, tickets: 2, status: "ok", initials: "OA", color: "#6B7280", lastVisit: "Сегодня", alerts: 0, description: "1 физ. сервер, Proxmox + 4 ВМ, 10 рабочих станций" },
+  { id: "riverside", name: "Riverside Academy", industry: "Образование", tier: "Standard", devices: 3, tickets: 5, status: "warning", initials: "RA", color: "#22C55E", lastVisit: "Вчера", alerts: 1, description: "3 сервера, Proxmox-кластер, 8 ВМ, базовый K8s" },
+  { id: "metropolitan", name: "Metropolitan College", industry: "Образование", tier: "Premium", devices: 15, tickets: 12, status: "ok", initials: "MC", color: "#3B82F6", lastVisit: "16.07.2024", alerts: 0, description: "15 серверов, VMware-кластер, 40+ ВМ, 3 K8s-кластера" },
+  { id: "stateuni", name: "State University", industry: "Образование", tier: "Enterprise", devices: 52, tickets: 31, status: "warning", initials: "SU", color: "#8B5CF6", lastVisit: "15.07.2024", alerts: 3, description: "50+ серверов, мультикластер K8s, 200+ ВМ, СХД" },
+  { id: "alfatrade", name: "ООО «АльфаТрейд»", industry: "Торговля", tier: "Standard", devices: 5, tickets: 3, status: "ok", initials: "АТ", color: "#00D4A8", lastVisit: "Сегодня", alerts: 1, description: "5 устройств, Dell PowerEdge, Fortinet, Synology NAS" },
+  { id: "medclinic", name: "Клиника «МедЦентр»", industry: "Медицина", tier: "Premium" as keyof typeof TIERS, devices: 12, tickets: 1, status: "warning", initials: "МЦ", color: "#F59E0B", lastVisit: "Вчера", alerts: 1, description: "12 серверов, Cisco UCS, VMware vSphere, PACS-система" },
+  { id: "promtech", name: "ПромТех ООО", industry: "Производство", tier: "Premium" as keyof typeof TIERS, devices: 18, tickets: 0, status: "ok", initials: "ПТ", color: "#F59E0B", lastVisit: "15.07.2024", alerts: 0, description: "18 устройств, производственная сеть, SCADA-система" },
+];
+
+const LOGS_DATA = [
+  { id: 1, time: "16.07.2024 14:22:01", host: "srv-db-01", client: "ООО «АльфаТрейд»", severity: "warning", service: "postgresql", message: "checkpoint request in progress, write rate 45 MB/s" },
+  { id: 2, time: "16.07.2024 14:20:15", host: "k8s-node-01", client: "State University", severity: "error", service: "kubelet", message: "node k8s-node-03 is NotReady: container runtime is not running" },
+  { id: 3, time: "16.07.2024 14:18:42", host: "fw-01", client: "ООО «АльфаТрейд»", severity: "info", service: "fortios", message: "SSL VPN session established: user=vpn_user01 src=91.234.x.x" },
+  { id: 4, time: "16.07.2024 14:15:03", host: "srv-main-01", client: "Oakwood High School", severity: "critical", message: "CPU usage 97.3% for 10 minutes — threshold exceeded", service: "zabbix-agent" },
+  { id: 5, time: "16.07.2024 14:10:55", host: "nginx-proxy", client: "Metropolitan College", severity: "warning", service: "nginx", message: "too many open files (ulimit), dropping connections" },
+  { id: 6, time: "16.07.2024 14:08:12", host: "nas-01", client: "ООО «АльфаТрейд»", severity: "info", service: "rsync", message: "backup job completed: 14.3 GB transferred in 18m 42s" },
+  { id: 7, time: "16.07.2024 13:55:30", host: "sw-core-01", client: "ООО «АльфаТрейд»", severity: "info", service: "syslog", message: "interface GigabitEthernet1/0/12 up" },
+  { id: 8, time: "16.07.2024 13:45:11", host: "vm-postgres-01", client: "Riverside Academy", severity: "error", service: "postgresql", message: "FATAL: could not write to file pg_wal — disk full (98.9%)" },
+  { id: 9, time: "16.07.2024 13:30:00", host: "gitlab-ce", client: "ООО «АльфаТрейд»", severity: "info", service: "gitlab", message: "CI pipeline #1087 completed successfully in 4m 12s" },
+  { id: 10, time: "16.07.2024 13:15:22", host: "k8s-node-02", client: "State University", severity: "warning", service: "containerd", message: "pod app-frontend-6b8c4d OOMKilled: exceeded memory limit 2Gi" },
+  { id: 11, time: "16.07.2024 13:00:44", host: "srv-db-01", client: "ООО «АльфаТрейд»", severity: "info", service: "postgresql", message: "autovacuum: processed 1243 pages in database techcore_prod" },
+  { id: 12, time: "16.07.2024 12:48:03", host: "fw-clinic-01", client: "Клиника «МедЦентр»", severity: "warning", service: "fortios", message: "CPU 83%: high IPS/AV inspection load on HTTPS traffic" },
+];
+
+const NEWS_ITEMS = [
+  { id: 1, type: "feature", title: "Новый модуль: Container Mesh Graph", body: "Добавлена интерактивная визуализация сервисной сетки контейнеров для Kubernetes и Docker. Отображает направленные зависимости между подами и сервисами.", date: "15.07.2024", tag: "Новое" },
+  { id: 2, type: "maintenance", title: "Плановое обслуживание: 20 июля 03:00–05:00", body: "Замена ИБП в стойке Rack-A. Возможны кратковременные прерывания в мониторинге устройств, подключённых к данному сегменту.", date: "14.07.2024", tag: "Обслуживание" },
+  { id: 3, type: "update", title: "Обновление агента мониторинга до v3.2.1", body: "Новая версия Zabbix Agent 2 устранила утечку памяти при долгосрочной работе. Обновление применено на всех зарегистрированных хостах.", date: "10.07.2024", tag: "Обновление" },
+  { id: 4, type: "feature", title: "SLA Dashboard: 90-дневный календарь доступности", body: "Добавлен наглядный календарь доступности с цветовым кодированием по суткам. Доступен в разделе «SLA / Uptime».", date: "08.07.2024", tag: "Новое" },
+  { id: 5, type: "security", title: "Критическое обновление безопасности FortiOS", body: "Fortinet выпустил патч для CVE-2024-21762. Все межсетевые экраны клиентов обновлены в течение 24 часов после публикации.", date: "05.07.2024", tag: "Безопасность" },
+  { id: 6, type: "update", title: "Metropolitan College подключён к порталу", body: "Успешно завершена интеграция Metropolitan College — Premium тариф, 15 серверов, VMware-кластер, 3 K8s-кластера.", date: "01.07.2024", tag: "Клиенты" },
+];
+
+const CHANNELS = [
+  { id: "general", name: "general", type: "team" as const, unread: 0, topic: "Общий чат команды TechCore" },
+  { id: "alerts", name: "alerts", type: "team" as const, unread: 3, topic: "Автоматические алерты из Zabbix/Prometheus" },
+  { id: "oncall", name: "on-call", type: "team" as const, unread: 0, topic: "Дежурные смены и эскалации" },
+  { id: "incidents", name: "incident-response", type: "team" as const, unread: 1, topic: "Активный инцидент: srv-main-01" },
+  { id: "cl-alfatrade", name: "client-alfatrade", type: "client" as const, unread: 0, topic: "ООО «АльфаТрейд»" },
+  { id: "cl-oakwood", name: "client-oakwood", type: "client" as const, unread: 2, topic: "Oakwood High School" },
+  { id: "cl-stateuni", name: "client-stateuni", type: "client" as const, unread: 0, topic: "State University — Миграция на K8s" },
+];
+
+const DMS = [
+  { id: "dm-sidorov", name: "Сидоров С.К.", initials: "СС", color: "#3B82F6", online: true },
+  { id: "dm-petrov", name: "Петров В.С.", initials: "ПВ", color: "#8B5CF6", online: false },
+  { id: "dm-grigoriev", name: "Григорьев А.Е.", initials: "ГА", color: "#F59E0B", online: true },
 ];
 
 const NOC_ALERTS = [
@@ -1497,6 +1604,7 @@ function NOCView() {
                 <div className="flex gap-2 flex-shrink-0">
                   <button onClick={() => ack(alert.id)} className="text-xs px-2.5 py-1 rounded" style={{ backgroundColor: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>ACK</button>
                   <button onClick={() => suppress(alert.id)} className="text-xs px-2.5 py-1 rounded" style={{ backgroundColor: "#4A607015", color: "#4A6070", border: "1px solid #4A607030" }}>Заглушить 2ч</button>
+                  <button className="text-xs px-2.5 py-1 rounded flex items-center gap-1" style={{ backgroundColor: "#EF444415", color: "#EF4444", border: "1px solid #EF444430" }}><TicketCheck size={10} />Тикет</button>
                 </div>
               )}
             </div>
@@ -1614,8 +1722,13 @@ function InternalWiki() {
 function TeamChat() {
   const [input, setInput] = useState("");
   const [msgs, setMsgs] = useState(TEAM_MESSAGES);
+  const [activeChannel, setActiveChannel] = useState("general");
   const bottomRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, activeChannel]);
+
+  const ch = CHANNELS.find(c => c.id === activeChannel) ?? CHANNELS[0];
+  const teamChannels = CHANNELS.filter(c => c.type === "team");
+  const clientChannels = CHANNELS.filter(c => c.type === "client");
 
   const send = () => {
     if (!input.trim()) return;
@@ -1623,28 +1736,259 @@ function TeamChat() {
     setInput("");
   };
 
+  const NavCh = ({ channel }: { channel: typeof CHANNELS[number] }) => {
+    const active = activeChannel === channel.id;
+    return (
+      <button onClick={() => setActiveChannel(channel.id)} className="w-full flex items-center gap-2 px-3 py-1.5 rounded text-xs text-left transition-colors" style={{ backgroundColor: active ? "#00D4A810" : "transparent", color: active ? "#00D4A8" : "#4A6070" }}>
+        <Hash size={11} className="flex-shrink-0" />
+        <span className="flex-1 truncate">{channel.name}</span>
+        {channel.unread > 0 && <span className="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ backgroundColor: "#EF4444", color: "#fff", fontSize: 9 }}>{channel.unread}</span>}
+      </button>
+    );
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="text-xs uppercase tracking-widest mb-4" style={{ ...MONO, color: "#4A6070" }}>Командный чат инженеров · #general</div>
-      <div className="flex-1 overflow-auto space-y-3 mb-4">
-        {msgs.map(msg => {
-          const isMe = msg.from === "Иванов И.А.";
+    <div className="flex h-full gap-0" style={{ margin: "-24px", height: "calc(100% + 48px)" }}>
+      {/* Channel sidebar */}
+      <div className="w-52 flex-shrink-0 flex flex-col" style={{ backgroundColor: "#04070A", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+        <div className="px-3 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="text-xs font-semibold text-foreground">Чат команды</div>
+          <div className="text-xs mt-0.5" style={{ ...MONO, color: "#4A6070" }}>TechCore Systems</div>
+        </div>
+        <div className="flex-1 overflow-auto py-2">
+          <div className="px-3 py-1 text-xs uppercase tracking-widest mb-1" style={{ ...MONO, color: "#2A3A44" }}>Каналы</div>
+          {teamChannels.map(c => <NavCh key={c.id} channel={c} />)}
+          <div className="px-3 py-1 text-xs uppercase tracking-widest mb-1 mt-3" style={{ ...MONO, color: "#2A3A44" }}>Клиентские</div>
+          {clientChannels.map(c => <NavCh key={c.id} channel={c} />)}
+          <div className="px-3 py-1 text-xs uppercase tracking-widest mb-1 mt-3" style={{ ...MONO, color: "#2A3A44" }}>Личные</div>
+          {DMS.map(dm => (
+            <button key={dm.id} className="w-full flex items-center gap-2 px-3 py-1.5 rounded text-xs text-left transition-colors hover:bg-muted" style={{ color: "#4A6070" }}>
+              <div className="relative flex-shrink-0">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: `${dm.color}20`, color: dm.color, fontSize: 8 }}>{dm.initials}</div>
+                <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border" style={{ backgroundColor: dm.online ? "#22C55E" : "#4A6070", borderColor: "#04070A" }} />
+              </div>
+              <span className="truncate flex-1">{dm.name}</span>
+            </button>
+          ))}
+        </div>
+        <div className="px-3 py-3 flex items-center gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor: "#00D4A818", color: "#00D4A8", fontSize: 8 }}>ИИ</div>
+          <div className="flex-1 min-w-0"><div className="text-xs text-foreground">Иванов И.А.</div><div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#22C55E" }} /><span className="text-xs" style={{ ...MONO, color: "#4A6070", fontSize: 9 }}>В сети</span></div></div>
+        </div>
+      </div>
+
+      {/* Chat area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <Hash size={13} style={{ color: "#4A6070" }} />
+          <span className="text-sm font-semibold text-foreground">{ch.name}</span>
+          <span className="text-xs ml-2 truncate" style={{ color: "#4A6070" }}>{ch.topic}</span>
+        </div>
+        <div className="flex-1 overflow-auto px-5 py-4 space-y-3">
+          {msgs.map(msg => {
+            const isMe = msg.from === "Иванов И.А.";
+            return (
+              <div key={msg.id} className={`flex gap-3 ${isMe ? "flex-row-reverse" : ""}`}>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor: `${msg.color}18`, color: msg.color }}>{msg.initials}</div>
+                <div className={`flex flex-col gap-0.5 max-w-md ${isMe ? "items-end" : "items-start"}`}>
+                  <div className="flex items-center gap-2" style={{ flexDirection: isMe ? "row-reverse" : "row" }}><span className="text-xs font-medium text-foreground">{msg.from}</span><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{msg.time}</span></div>
+                  <div className="px-3 py-2 rounded text-sm" style={{ backgroundColor: isMe ? "#00D4A812" : "#111C24", border: `1px solid ${isMe ? "#00D4A830" : "rgba(255,255,255,0.065)"}`, color: "#C4D2DC" }}>{msg.text}</div>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={bottomRef} />
+        </div>
+        <div className="flex gap-2 px-5 py-4 flex-shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder={`Сообщение в #${ch.name}...`} className="flex-1 rounded text-sm px-3 py-2 outline-none" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }} />
+          <button onClick={send} disabled={!input.trim()} className="px-3 py-2 rounded" style={{ backgroundColor: input.trim() ? "#00D4A8" : "#00D4A820", color: input.trim() ? "#000" : "#4A6070" }}><Send size={13} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── All Organizations ────────────────────────────────────────────────────────
+
+function AllOrgsPage({ onViewClient }: { onViewClient: (id: string) => void }) {
+  const [search, setSearch] = useState("");
+  const [tierFilter, setTierFilter] = useState("all");
+  const filtered = CLIENTS.filter(c =>
+    (tierFilter === "all" || c.tier === tierFilter) &&
+    (!search || c.name.toLowerCase().includes(search.toLowerCase()))
+  );
+  const tierKeys = Object.keys(TIERS) as Array<keyof typeof TIERS>;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex-1 min-w-48 relative">
+          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#4A6070" }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск организации..." className="w-full rounded text-sm pl-8 pr-3 py-2 outline-none" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }} />
+        </div>
+        <button onClick={() => setTierFilter("all")} className="text-xs px-3 py-1.5 rounded border transition-colors" style={{ borderColor: tierFilter === "all" ? "#00D4A8" : "rgba(255,255,255,0.065)", color: tierFilter === "all" ? "#00D4A8" : "#4A6070", backgroundColor: tierFilter === "all" ? "#00D4A808" : "transparent" }}>Все тарифы</button>
+        {tierKeys.map(t => (
+          <button key={t} onClick={() => setTierFilter(t)} className="text-xs px-3 py-1.5 rounded border transition-colors" style={{ borderColor: tierFilter === t ? TIERS[t].color : "rgba(255,255,255,0.065)", color: tierFilter === t ? TIERS[t].color : "#4A6070", backgroundColor: tierFilter === t ? `${TIERS[t].color}10` : "transparent" }}>{t}</button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        {filtered.map(client => {
+          const tier = TIERS[client.tier];
+          const sc = client.status === "ok" ? "#22C55E" : client.status === "warning" ? "#F59E0B" : "#EF4444";
           return (
-            <div key={msg.id} className={`flex gap-3 ${isMe ? "flex-row-reverse" : ""}`}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor: `${msg.color}18`, color: msg.color }}>{msg.initials}</div>
-              <div className={`flex flex-col gap-0.5 max-w-md ${isMe ? "items-end" : "items-start"}`}>
-                <div className="flex items-center gap-2" style={{ flexDirection: isMe ? "row-reverse" : "row" }}><span className="text-xs font-medium text-foreground">{msg.from}</span><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{msg.time}</span></div>
-                <div className="px-3 py-2 rounded text-sm" style={{ backgroundColor: isMe ? "#00D4A812" : "#111C24", border: `1px solid ${isMe ? "#00D4A830" : "rgba(255,255,255,0.065)"}`, color: "#C4D2DC" }}>{msg.text}</div>
+            <div key={client.id} className="p-5 rounded border transition-all hover:border-[rgba(255,255,255,0.15)]" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0" style={{ ...MONO, backgroundColor: `${client.color}20`, color: client.color }}>{client.initials}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-foreground truncate">{client.name}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "#4A6070" }}>{client.industry}</div>
+                </div>
+                <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: sc, boxShadow: `0 0 6px ${sc}60` }} />
+              </div>
+              <div className="text-xs mb-4 leading-relaxed" style={{ color: "#4A6070" }}>{client.description}</div>
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ ...MONO, backgroundColor: `${tier.color}15`, color: tier.color, border: `1px solid ${tier.color}30` }}>{tier.label}</span>
+                <span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{client.devices} устр.</span>
+                {client.tickets > 0 && <span className="text-xs" style={{ ...MONO, color: "#F59E0B" }}>{client.tickets} тик.</span>}
+                {client.alerts > 0 && <span className="text-xs" style={{ ...MONO, color: "#EF4444" }}>{client.alerts} алерт.</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => onViewClient(client.id)} className="flex-1 text-xs py-1.5 rounded font-medium transition-colors" style={{ backgroundColor: "#00D4A8", color: "#000" }}>Войти как клиент</button>
+                <span className="text-xs" style={{ ...MONO, color: "#2A3A44" }}>{client.lastVisit}</span>
               </div>
             </div>
           );
         })}
-        <div ref={bottomRef} />
       </div>
-      <div className="flex gap-2 flex-shrink-0">
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Сообщение команде... (Enter — отправить)" className="flex-1 rounded text-sm px-3 py-2 outline-none" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }} />
-        <button onClick={send} disabled={!input.trim()} className="px-3 py-2 rounded" style={{ backgroundColor: input.trim() ? "#00D4A8" : "#00D4A820", color: input.trim() ? "#000" : "#4A6070" }}><Send size={13} /></button>
+    </div>
+  );
+}
+
+// ─── Log Aggregator ───────────────────────────────────────────────────────────
+
+function LogsPage() {
+  const [sevFilter, setSevFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [createTicketFor, setCreateTicketFor] = useState<number | null>(null);
+
+  const sevs = ["all", "critical", "error", "warning", "info"] as const;
+  const sevColor = (s: string) => s === "critical" ? "#EF4444" : s === "error" ? "#F87171" : s === "warning" ? "#F59E0B" : "#4A6070";
+
+  const filtered = LOGS_DATA.filter(l =>
+    (sevFilter === "all" || l.severity === sevFilter) &&
+    (!search || l.message.toLowerCase().includes(search.toLowerCase()) || l.host.includes(search) || l.client.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex-1 min-w-48 relative">
+          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#4A6070" }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Хост, клиент, ключевое слово..." className="w-full rounded text-sm pl-8 pr-3 py-2 outline-none" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }} />
+        </div>
+        {sevs.map(s => (
+          <button key={s} onClick={() => setSevFilter(s)} className="text-xs px-3 py-1.5 rounded border transition-colors capitalize" style={{ borderColor: sevFilter === s ? sevColor(s === "all" ? "info" : s) : "rgba(255,255,255,0.065)", color: sevFilter === s ? sevColor(s === "all" ? "info" : s) : "#4A6070", backgroundColor: sevFilter === s ? `${sevColor(s === "all" ? "info" : s)}10` : "transparent" }}>
+            {s === "all" ? "Все" : s}
+          </button>
+        ))}
+        <span className="text-xs ml-auto" style={{ ...MONO, color: "#4A6070" }}>{filtered.length} записей</span>
       </div>
+
+      <div className="rounded overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.065)" }}>
+        <table className="w-full">
+          <thead>
+            <tr style={{ backgroundColor: "#06090C", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              {["Время", "Клиент", "Хост", "Сервис", "Сообщение", ""].map(h => (
+                <th key={h} className="text-left px-4 py-2.5 text-xs" style={{ ...MONO, color: "#2A3A44", fontWeight: 500 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((log, i) => {
+              const sc = sevColor(log.severity);
+              return (
+                <tr key={log.id} className="group" style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", backgroundColor: i % 2 === 0 ? "transparent" : "#06090C20" }}>
+                  <td className="px-4 py-2.5 text-xs whitespace-nowrap" style={{ ...MONO, color: "#4A6070" }}>{log.time}</td>
+                  <td className="px-4 py-2.5 text-xs whitespace-nowrap" style={{ color: "#94A3B8" }}>{log.client}</td>
+                  <td className="px-4 py-2.5 text-xs whitespace-nowrap"><span className="px-1.5 py-0.5 rounded" style={{ ...MONO, backgroundColor: "#111C24", color: "#00D4A8" }}>{log.host}</span></td>
+                  <td className="px-4 py-2.5 text-xs whitespace-nowrap" style={{ ...MONO, color: "#4A6070" }}>{log.service}</td>
+                  <td className="px-4 py-2.5 text-xs" style={{ color: "#C4D2DC", maxWidth: 320 }}>
+                    <div className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: sc }} />
+                      <span className="truncate" title={log.message}>{log.message}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-xs">
+                    <button
+                      onClick={() => setCreateTicketFor(createTicketFor === log.id ? null : log.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-2 py-1 rounded whitespace-nowrap"
+                      style={{ backgroundColor: "#EF444415", color: "#EF4444", border: "1px solid #EF444430" }}
+                    >
+                      <TicketCheck size={10} />Тикет
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {createTicketFor !== null && (() => {
+        const log = LOGS_DATA.find(l => l.id === createTicketFor);
+        if (!log) return null;
+        return (
+          <div className="p-4 rounded" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(0,212,168,0.25)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold" style={{ color: "#00D4A8" }}>Создать тикет из лог-записи</span>
+              <button onClick={() => setCreateTicketFor(null)} style={{ color: "#4A6070" }}><X size={13} /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div><div className="text-xs mb-1" style={{ ...MONO, color: "#4A6070" }}>ЗАГОЛОВОК</div><input defaultValue={`${log.severity.toUpperCase()}: ${log.host} — ${log.service}`} className="w-full rounded text-xs px-2.5 py-2 outline-none" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }} /></div>
+              <div><div className="text-xs mb-1" style={{ ...MONO, color: "#4A6070" }}>КЛИЕНТ</div><input defaultValue={log.client} className="w-full rounded text-xs px-2.5 py-2 outline-none" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }} /></div>
+            </div>
+            <div className="mb-3"><div className="text-xs mb-1" style={{ ...MONO, color: "#4A6070" }}>ОПИСАНИЕ</div><textarea defaultValue={log.message} rows={2} className="w-full rounded text-xs px-2.5 py-2 outline-none resize-none" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC", fontFamily: "inherit" }} /></div>
+            <div className="flex gap-2">
+              <button onClick={() => setCreateTicketFor(null)} className="flex-1 py-1.5 rounded text-xs font-medium" style={{ backgroundColor: "#00D4A8", color: "#000" }}>Создать тикет INC</button>
+              <button onClick={() => setCreateTicketFor(null)} className="px-3 py-1.5 rounded text-xs" style={{ backgroundColor: "#4A607015", color: "#4A6070" }}>Отмена</button>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ─── News Feed ────────────────────────────────────────────────────────────────
+
+function NewsPage() {
+  const tagColor = (type: string) => {
+    if (type === "security") return "#EF4444";
+    if (type === "maintenance") return "#F59E0B";
+    if (type === "feature") return "#00D4A8";
+    if (type === "update") return "#3B82F6";
+    return "#4A6070";
+  };
+  return (
+    <div className="max-w-2xl space-y-4">
+      {NEWS_ITEMS.map(item => {
+        const tc = tagColor(item.type);
+        return (
+          <div key={item.id} className="p-5 rounded border transition-all hover:border-[rgba(255,255,255,0.15)]" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
+            <div className="flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-xs px-2 py-0.5 rounded font-medium" style={{ ...MONO, backgroundColor: `${tc}15`, color: tc, border: `1px solid ${tc}30` }}>{item.tag}</span>
+                  <span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{item.date}</span>
+                </div>
+                <div className="text-sm font-semibold text-foreground mb-2">{item.title}</div>
+                <div className="text-xs leading-relaxed" style={{ color: "#4A6070" }}>{item.body}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1693,7 +2037,21 @@ function ClientContextSwitcher({ currentClientId, onSwitch }: { currentClientId:
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-const NAV_MAIN = [
+// Engineer-mode navigation (replaces all sections)
+const NAV_ENG = [
+  { id: "engkpi", label: "Обзор / KPI", icon: Gauge },
+  { id: "orgs", label: "Организации", icon: Building2 },
+  { id: "kanban", label: "Service Desk", icon: LayoutGrid, badge: 2 },
+  { id: "infra", label: "Инфраструктура", icon: Network },
+  { id: "noc", label: "Алерты / NOC", icon: BellRing, badge: NOC_ALERTS.filter(a=>!a.acked&&!a.suppressed).length },
+  { id: "logs", label: "Логи", icon: TerminalSquare },
+  { id: "wiki", label: "Wiki / Сценарии", icon: BookMarked },
+  { id: "teamchat", label: "Чат команды", icon: MessageSquare },
+  { id: "news", label: "Новости", icon: Newspaper },
+] as const;
+
+// Client-mode navigation
+const NAV_CLIENT_MAIN = [
   { id: "dashboard", label: "Обзор", icon: LayoutDashboard },
   { id: "servicedesk", label: "Заявки", icon: LifeBuoy, badge: 2 },
   { id: "docs", label: "Документы", icon: BookOpen },
@@ -1701,79 +2059,68 @@ const NAV_MAIN = [
   { id: "finance", label: "Финансы", icon: CreditCard },
 ] as const;
 
-const NAV_EXT = [
+const NAV_CLIENT_EXT = [
   { id: "sla", label: "SLA / Uptime", icon: Radio },
   { id: "billing", label: "Тариф и оплата", icon: BarChart2 },
   { id: "api", label: "API & Интеграции", icon: Code2 },
   { id: "audit", label: "Журнал аудита", icon: History },
 ] as const;
 
-const NAV_ENGINEER = [
-  { id: "kanban", label: "Kanban", icon: LayoutGrid },
-  { id: "noc", label: "NOC / Алерты", icon: BellRing, badge: NOC_ALERTS.filter(a=>!a.acked&&!a.suppressed).length },
-  { id: "engkpi", label: "Мои показатели", icon: Gauge },
-  { id: "wiki", label: "Wiki / Сценарии", icon: BookMarked },
-  { id: "teamchat", label: "Чат команды", icon: MessageSquare },
-] as const;
-
 function Sidebar({ view, setView, role, currentClientId, onSwitchAccount }: { view: string; setView: (v: string) => void; role: "engineer"|"client"; currentClientId: string|null; onSwitchAccount: () => void }) {
   const navView = ["fullchat","software"].includes(view) ? "servicedesk" : view === "account" ? "" : view;
-  const isEngineer = role === "engineer";
+  const isEngineer = role === "engineer" && !currentClientId;
   const contextClient = currentClientId ? CLIENTS.find(c => c.id === currentClientId) : null;
 
   const NavBtn = ({ id, label, icon: Icon, badge }: { id: string; label: string; icon: React.ElementType; badge?: number }) => {
     const active = navView === id;
-    return <button onClick={() => setView(id)} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-sm transition-all" style={{ color:active?"#00D4A8":"#4A6070", backgroundColor:active?"#00D4A810":"transparent", borderLeft:active?"2px solid #00D4A8":"2px solid transparent", paddingLeft:active?10:12 }}><Icon size={14}/><span className="flex-1 text-left">{label}</span>{!!badge&&badge>0&&<span className="text-xs px-1.5 py-0.5 rounded" style={{ ...MONO, backgroundColor:"#EF444420", color:"#EF4444" }}>{badge}</span>}</button>;
+    return <button onClick={() => setView(id)} className="w-full flex items-center gap-2.5 px-3 py-2 rounded text-sm transition-all" style={{ color:active?"#00D4A8":"#4A6070", backgroundColor:active?"#00D4A810":"transparent", borderLeft:active?"2px solid #00D4A8":"2px solid transparent", paddingLeft:active?10:12 }}><Icon size={14}/><span className="flex-1 text-left text-xs">{label}</span>{!!badge&&badge>0&&<span className="text-xs px-1.5 py-0.5 rounded" style={{ ...MONO, backgroundColor:"#EF444420", color:"#EF4444", fontSize:9 }}>{badge}</span>}</button>;
   };
 
   return (
-    <div className="w-52 flex-shrink-0 flex flex-col" style={{ backgroundColor:"#04070A", borderRight:"1px solid rgba(255,255,255,0.05)" }}>
+    <div className="w-52 flex-shrink-0 flex flex-col" style={{ backgroundColor:"var(--sidebar)", borderRight:"1px solid var(--sidebar-border)" }}>
       {/* Logo */}
-      <div className="px-4 pt-5 pb-4" style={{ borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
-        <div className="flex items-center gap-2.5"><div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor:"#00D4A8" }}><Zap size={13} style={{ color:"#000" }}/></div><div><div className="text-sm font-semibold text-foreground">TechCore</div><div className="text-xs" style={{ ...MONO, color:"#4A6070" }}>{isEngineer?"инженерный портал":"системная интеграция"}</div></div></div>
+      <div className="px-4 pt-5 pb-4" style={{ borderBottom:"1px solid var(--sidebar-border)" }}>
+        <div className="flex items-center gap-2.5"><div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor:"#00D4A8" }}><Zap size={13} style={{ color:"#000" }}/></div><div><div className="text-sm font-semibold text-foreground">TechCore</div><div className="text-xs" style={{ ...MONO, color:"var(--muted-foreground)" }}>{isEngineer?"инженерный портал":"системная интеграция"}</div></div></div>
       </div>
 
       {/* Context client or org */}
-      <div className="px-3 py-3" style={{ borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+      <div className="px-3 py-3" style={{ borderBottom:"1px solid var(--sidebar-border)" }}>
         {contextClient ? (
           <div className="flex items-center gap-2 px-2 py-2 rounded" style={{ backgroundColor:"#F59E0B10", border:"1px solid #F59E0B30" }}>
             <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor:`${contextClient.color}20`, color:contextClient.color, fontSize:8 }}>{contextClient.initials}</div>
             <div className="min-w-0 flex-1"><div className="text-xs text-foreground truncate">{contextClient.name}</div><div className="text-xs" style={{ ...MONO, color:"#F59E0B", fontSize:10 }}>Режим клиента</div></div>
           </div>
         ) : (
-          <div className="flex items-center gap-2 px-2 py-2 rounded" style={{ backgroundColor:"#0C1117" }}><Building2 size={11} style={{ color:"#4A6070", flexShrink:0 }}/><div className="min-w-0"><div className="text-xs text-foreground truncate">{isEngineer?"TechCore Systems":"ООО «АльфаТрейд»"}</div><div className="text-xs" style={{ ...MONO, color:"#4A6070", fontSize:10 }}>{isEngineer?"Инженерный режим":"ID: ORG-0071"}</div></div></div>
+          <div className="flex items-center gap-2 px-2 py-2 rounded bg-card"><Building2 size={11} style={{ color:"var(--muted-foreground)", flexShrink:0 }}/><div className="min-w-0"><div className="text-xs text-foreground truncate">{isEngineer?"TechCore Systems":"ООО «АльфаТрейд»"}</div><div className="text-xs" style={{ ...MONO, color:"var(--muted-foreground)", fontSize:10 }}>{isEngineer?"Инженерный режим":"ID: ORG-0071"}</div></div></div>
         )}
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-auto">
-        {NAV_MAIN.map(item=><NavBtn key={item.id} {...item}/>)}
-        <div className="my-2 mx-2" style={{ height:1, backgroundColor:"rgba(255,255,255,0.05)" }}/>
-        <div className="text-xs px-3 py-1" style={{ ...MONO, color:"#2A3A44" }}>РАСШИРЕННЫЕ</div>
-        {NAV_EXT.map(item=><NavBtn key={item.id} {...item}/>)}
-
-        {/* Engineer-only section */}
-        {isEngineer && !currentClientId && (<>
-          <div className="my-2 mx-2" style={{ height:1, backgroundColor:"rgba(255,255,255,0.05)" }}/>
-          <div className="text-xs px-3 py-1 flex items-center gap-1.5" style={{ ...MONO, color:"#2A3A44" }}><Wrench size={9}/>ИНЖЕНЕРНЫЙ</div>
-          {NAV_ENGINEER.map(item=><NavBtn key={item.id} {...item}/>)}
+        {isEngineer ? (
+          NAV_ENG.map(item => <NavBtn key={item.id} {...item} />)
+        ) : (<>
+          {NAV_CLIENT_MAIN.map(item=><NavBtn key={item.id} {...item}/>)}
+          <div className="my-2 mx-2" style={{ height:1, backgroundColor:"var(--sidebar-border)" }}/>
+          <div className="text-xs px-3 py-1" style={{ ...MONO, color:"var(--muted-foreground)", opacity:0.5 }}>РАСШИРЕННЫЕ</div>
+          {NAV_CLIENT_EXT.map(item=><NavBtn key={item.id} {...item}/>)}
         </>)}
       </nav>
 
       {/* Profile + Switch Account */}
-      <div className="px-3 py-3 space-y-1.5" style={{ borderTop:"1px solid rgba(255,255,255,0.05)" }}>
+      <div className="px-3 py-3 space-y-1.5" style={{ borderTop:"1px solid var(--sidebar-border)" }}>
         <button onClick={() => setView("account")} className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-muted transition-colors" style={{ backgroundColor:view==="account"?"#00D4A810":"transparent" }}>
-          {isEngineer
+          {role==="engineer"
             ? <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor:"#00D4A818", color:"#00D4A8" }}>ИИ</div>
             : <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ ...MONO, backgroundColor:"#8B5CF618", color:"#8B5CF6" }}>ПА</div>}
           <div className="flex-1 min-w-0 text-left">
-            <div className="text-xs text-foreground truncate">{isEngineer?"Иванов И.А.":"Петров А.С."}</div>
-            <div className="text-xs" style={{ ...MONO, color:"#4A6070", fontSize:10 }}>{isEngineer?"Инженер L2":"Администратор"}</div>
+            <div className="text-xs text-foreground truncate">{role==="engineer"?"Иванов И.А.":"Петров А.С."}</div>
+            <div className="text-xs" style={{ ...MONO, color:"var(--muted-foreground)", fontSize:10 }}>{role==="engineer"?"Инженер L2":"Администратор"}</div>
           </div>
-          <Settings size={12} style={{ color:"#4A6070" }}/>
+          <Settings size={12} style={{ color:"var(--muted-foreground)" }}/>
         </button>
-        {isEngineer && (
-          <button onClick={onSwitchAccount} className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors" style={{ color:"#4A6070" }}>
+        {role==="engineer" && (
+          <button onClick={onSwitchAccount} className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors" style={{ color:"var(--muted-foreground)" }}>
             <ArrowRightLeft size={11}/><span>Сменить аккаунт</span>
             {currentClientId && <span className="ml-auto w-1.5 h-1.5 rounded-full" style={{ backgroundColor:"#F59E0B" }}/>}
           </button>
@@ -1790,19 +2137,24 @@ const PAGE_TITLES: Record<string,string> = {
   infra:"Инфраструктура", finance:"Финансы", fullchat:"Чат по заявке",
   account:"Мой аккаунт", sla:"SLA / Мониторинг доступности", billing:"Тариф и оплата",
   api:"API & Интеграции", audit:"Журнал аудита", software:"Программное обеспечение",
-  kanban:"Kanban — все клиенты", noc:"NOC / Активные алерты", engkpi:"Мои показатели",
+  kanban:"Service Desk — все клиенты", noc:"NOC / Активные алерты", engkpi:"Обзор и KPI",
   wiki:"Внутренняя Wiki / Сценарии", teamchat:"Чат команды", switchaccount:"Смена аккаунта",
+  orgs:"Все организации", logs:"Агрегатор логов", news:"Новости и обновления",
 };
 
 export default function App() {
-  const [view,setView]=useState("dashboard");
+  const [view,setView]=useState("engkpi");
   const [chatTicketId,setChatTicketId]=useState("INC-2847");
   const [selectedTicketId,setSelectedTicketId]=useState<string|null>(null);
   const [selectedDeviceId,setSelectedDeviceId]=useState<string|null>(null);
   const [softwareName,setSoftwareName]=useState<string|null>(null);
-  // Engineer role & impersonation
   const [role,setRole]=useState<"engineer"|"client">("engineer");
   const [currentClientId,setCurrentClientId]=useState<string|null>(null);
+  const [theme,setTheme]=useState<"dark"|"light">("dark");
+
+  useEffect(()=>{
+    document.documentElement.setAttribute("data-theme", theme === "light" ? "light" : "");
+  },[theme]);
 
   const handleSetView=(v:string)=>{
     if(v!=="servicedesk")setSelectedTicketId(null);
@@ -1817,14 +2169,17 @@ export default function App() {
 
   const handleSwitchClient=(id:string|null)=>{
     setCurrentClientId(id);
-    if(id){setRole("client");}else{setRole("engineer");}
-    setView("dashboard");
+    if(id){setRole("client");setView("dashboard");}else{setRole("engineer");setView("engkpi");}
   };
-  const handleExitImpersonation=()=>{ setCurrentClientId(null); setRole("engineer"); setView("dashboard"); };
+  const handleExitImpersonation=()=>{ setCurrentClientId(null); setRole("engineer"); setView("engkpi"); };
+  const handleViewClient=(id:string)=>{ handleSwitchClient(id); };
 
   const pageTitle=view==="fullchat"?`${PAGE_TITLES.fullchat} · ${chatTicketId}`:view==="software"&&softwareName?softwareName:PAGE_TITLES[view]??view;
   const contextClient=currentClientId?CLIENTS.find(c=>c.id===currentClientId):null;
-  const headerSubtitle=contextClient?`${contextClient.name} · Режим просмотра`:"ООО «АльфаТрейд» · 16.07.2024";
+  const isEngineer=role==="engineer"&&!currentClientId;
+  const headerSubtitle=contextClient?`${contextClient.name} · Режим просмотра`:isEngineer?"TechCore Systems · Инженерный режим":"ООО «АльфаТрейд» · 16.07.2024";
+
+  const isFullscreen=view==="fullchat"||view==="teamchat";
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden" style={{ fontFamily:"'Inter', -apple-system, sans-serif" }}>
@@ -1834,19 +2189,22 @@ export default function App() {
         {currentClientId && contextClient && <ImpersonationBanner clientName={contextClient.name} onExit={handleExitImpersonation}/>}
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3 flex-shrink-0" style={{ backgroundColor:"#04070A", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
-          <div><h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1><div className="text-xs mt-0.5" style={{ ...MONO, color: currentClientId?"#F59E0B":"#4A6070" }}>{headerSubtitle}</div></div>
+        <div className="flex items-center justify-between px-6 py-3 flex-shrink-0" style={{ backgroundColor:"var(--sidebar)", borderBottom:"1px solid var(--sidebar-border)" }}>
+          <div><h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1><div className="text-xs mt-0.5" style={{ ...MONO, color: currentClientId?"#F59E0B":"var(--muted-foreground)" }}>{headerSubtitle}</div></div>
           <div className="flex items-center gap-2">
             {role==="engineer"&&<ClientContextSwitcher currentClientId={currentClientId} onSwitch={handleSwitchClient}/>}
-            <button className="relative p-2 rounded hover:bg-muted" style={{ color:"#4A6070" }}><Bell size={14}/>{NOC_ALERTS.filter(a=>!a.acked&&!a.suppressed).length>0&&<span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ backgroundColor:"#EF4444" }}/>}</button>
-            <button className="p-2 rounded hover:bg-muted" style={{ color:"#4A6070" }}><RefreshCw size={13}/></button>
+            <button className="relative p-2 rounded hover:bg-muted transition-colors" style={{ color:"var(--muted-foreground)" }}><Bell size={14}/>{NOC_ALERTS.filter(a=>!a.acked&&!a.suppressed).length>0&&<span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ backgroundColor:"#EF4444" }}/>}</button>
+            <button className="p-2 rounded hover:bg-muted transition-colors" style={{ color:"var(--muted-foreground)" }}><RefreshCw size={13}/></button>
+            <button onClick={()=>setTheme(t=>t==="dark"?"light":"dark")} className="p-2 rounded hover:bg-muted transition-colors" style={{ color:"var(--muted-foreground)" }} title={theme==="dark"?"Светлая тема":"Тёмная тема"}>
+              {theme==="dark"?<Sun size={13}/>:<Moon size={13}/>}
+            </button>
             <div className="w-px h-4 bg-border mx-1"/>
-            <span className="text-xs" style={{ ...MONO, color:"#4A6070" }}>Обновлено: 14:22</span>
+            <span className="text-xs" style={{ ...MONO, color:"var(--muted-foreground)" }}>Обновлено: 14:22</span>
           </div>
         </div>
 
         {/* Content */}
-        <div className={`flex-1 overflow-auto${view==="fullchat"||view==="teamchat"?"":" p-6"}`}>
+        <div className={`flex-1 overflow-auto${isFullscreen?"":" p-6"}`}>
           {view==="dashboard"&&<Dashboard onNavigateToTicket={navigateToTicket} onNavigateToDevice={navigateToDevice}/>}
           {view==="servicedesk"&&<ServiceDesk onOpenChat={openChat} initialTicket={selectedTicketId}/>}
           {view==="docs"&&<Docs/>}
@@ -1858,14 +2216,17 @@ export default function App() {
           {view==="billing"&&<BillingPage/>}
           {view==="api"&&<APIPage/>}
           {view==="audit"&&<AuditPage/>}
-          {view==="fullchat"&&<div className="flex flex-col h-full overflow-hidden"><FullChat ticketId={chatTicketId} onBack={() => setView("servicedesk")}/></div>}
+          {view==="fullchat"&&<div className="flex h-full overflow-hidden"><FullChat ticketId={chatTicketId} onBack={() => setView("servicedesk")}/></div>}
           {/* Engineer-only views */}
           {view==="kanban"&&role==="engineer"&&<KanbanBoard/>}
           {view==="noc"&&role==="engineer"&&<NOCView/>}
           {view==="engkpi"&&role==="engineer"&&<EngineerKPI/>}
           {view==="wiki"&&role==="engineer"&&<InternalWiki/>}
-          {view==="teamchat"&&role==="engineer"&&<div className="flex flex-col h-full p-6"><TeamChat/></div>}
-          {view==="switchaccount"&&<SwitchAccountPage currentClientId={currentClientId} onSelectClient={id=>handleSwitchClient(id)} onSelectEngineer={()=>{handleSwitchClient(null);setView("dashboard");}}/>}
+          {view==="teamchat"&&role==="engineer"&&<TeamChat/>}
+          {view==="orgs"&&role==="engineer"&&<AllOrgsPage onViewClient={handleViewClient}/>}
+          {view==="logs"&&role==="engineer"&&<LogsPage/>}
+          {view==="news"&&<NewsPage/>}
+          {view==="switchaccount"&&<SwitchAccountPage currentClientId={currentClientId} onSelectClient={id=>handleSwitchClient(id)} onSelectEngineer={()=>{handleSwitchClient(null);}}/>}
         </div>
       </div>
     </div>
