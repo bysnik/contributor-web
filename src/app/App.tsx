@@ -372,79 +372,123 @@ function Dashboard({ onNavigateToTicket, onNavigateToDevice }: { onNavigateToTic
   const [activeWidgets, setActiveWidgets] = useState<string[]>(DEFAULT_WIDGETS);
   const [showLib, setShowLib] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(true);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const dragIdRef = useRef<string | null>(null);
 
   const health = DEVICES.some(d => d.status === "critical") ? "critical" : DEVICES.some(d => d.status === "warning") ? "warning" : "ok";
   const hColor = STATUS_CFG[health].color;
   const hLabel = ({ ok: "Штатный режим", warning: "Требует внимания", critical: "Критические проблемы" } as Record<string, string>)[health];
   const critTickets = TICKETS.filter(t => t.priority === "critical" && t.status !== "resolved");
   const available = ALL_WIDGETS.filter(w => !activeWidgets.includes(w.id));
-  const has = (id: string) => activeWidgets.includes(id);
 
-  const WW = ({ id, children, full }: { id: string; children: React.ReactNode; full?: boolean }) => (
-    <div className={`relative ${full ? "col-span-full" : ""}`}>
-      {editMode && <button onClick={() => setActiveWidgets(p => p.filter(w => w !== id))} className="absolute -top-2 -right-2 z-20 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "#EF4444", color: "#fff" }}><X size={10} /></button>}
-      {children}
-    </div>
-  );
+  const reorder = (fromId: string, toId: string) => {
+    setActiveWidgets(prev => {
+      const arr = [...prev];
+      const fi = arr.indexOf(fromId), ti = arr.indexOf(toId);
+      if (fi === -1 || ti === -1) return prev;
+      arr.splice(fi, 1);
+      arr.splice(ti, 0, fromId);
+      return arr;
+    });
+  };
+
+  const colSpan = (id: string) => {
+    const w = ALL_WIDGETS.find(w => w.id === id);
+    if (w?.size === "full") return "col-span-4";
+    if (w?.size === "half") return "col-span-2";
+    return "col-span-1";
+  };
+
+  const renderContent = (id: string): React.ReactNode => {
+    switch (id) {
+      case "health":
+        return <Card className="p-4 h-full"><SLabel>Состояние инфраструктуры</SLabel><div className="flex items-center gap-3"><div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${hColor}15` }}><Activity size={20} style={{ color: hColor }} /></div><div><div className="text-sm font-semibold" style={{ color: hColor }}>{hLabel}</div><div className="text-xs mt-0.5" style={{ ...MONO, color: "var(--muted-foreground)" }}>{DEVICES.filter(d => d.status === "ok").length}/{DEVICES.length} устройств норма</div></div></div><div className="flex gap-1.5 mt-3">{DEVICES.map(d => <StatusDot key={d.id} status={d.status} size={6} />)}</div></Card>;
+      case "incidents":
+        return <Card className="p-4 h-full"><SLabel>Активные инциденты</SLabel><div className="flex items-end gap-2"><span className="text-4xl font-bold" style={{ color: critTickets.length > 0 ? "#EF4444" : "#22C55E" }}>{critTickets.length}</span><span className="text-muted-foreground text-sm mb-1.5">критических</span></div><div className="space-y-1 mt-1">{TICKETS.filter(t => t.status === "in_progress").slice(0, 2).map(t => <button key={t.id} onClick={() => onNavigateToTicket(t.id)} className="flex items-center gap-1.5 text-xs w-full text-left transition-opacity hover:opacity-70" style={{ ...MONO, color: "var(--muted-foreground)" }}><span style={{ color: PRIORITY_CFG[t.priority].color }}>●</span>{t.id}</button>)}</div></Card>;
+      case "maintenance":
+        return <Card className="p-4 h-full"><SLabel>Ближайшие работы</SLabel><div className="space-y-2.5">{MAINTENANCE.slice(0, 2).map((m, i) => <div key={i}><div className="text-xs text-foreground leading-snug">{m.title}</div><div className="text-xs mt-0.5" style={{ ...MONO, color: "var(--muted-foreground)" }}>{m.date} · {m.time}</div></div>)}</div></Card>;
+      case "licenses":
+        return <Card className="p-4 h-full"><SLabel>Лицензии / подписки</SLabel><div className="space-y-2">{LICENSES.map((l, i) => <div key={i} className="flex items-center justify-between gap-2"><span className="text-xs text-foreground truncate flex-1">{l.name.split(" ").slice(0, 2).join(" ")}</span><span className="text-xs flex-shrink-0" style={{ ...MONO, color: l.daysLeft < 90 ? "#F59E0B" : "var(--muted-foreground)" }}>{l.daysLeft}д</span></div>)}</div></Card>;
+      case "sla_widget":
+        return <Card className="p-4 h-full"><SLabel>SLA за июль</SLabel><div className="text-3xl font-bold" style={{ ...MONO, color: "#22C55E" }}>99.87%</div><div className="text-xs mt-1" style={{ ...MONO, color: "var(--muted-foreground)" }}>Цель: 99.5%</div></Card>;
+      case "billing_widget":
+        return <Card className="p-4 h-full"><SLabel>Тариф</SLabel><div className="text-sm font-semibold text-foreground mb-1">Standard Plan</div><div className="text-xs mb-2" style={{ ...MONO, color: "var(--muted-foreground)" }}>Устройства: {PLAN_DATA.devices.used}/{PLAN_DATA.devices.limit}</div><MetricBar label="Использование" value={Math.round(PLAN_DATA.devices.used / PLAN_DATA.devices.limit * 100)} color="#00D4A8" /></Card>;
+      case "devicemon":
+        return <div><SLabel>Мониторинг устройств</SLabel><div className="grid grid-cols-5 gap-3">{DEVICES.map(device => { const Icon = DEVICE_ICON[device.type] ?? Globe; const sc = STATUS_CFG[device.status]; const sparkColor = (device.cpu ?? 0) > 70 ? "#F59E0B" : "#00D4A8"; return (<Card key={device.id} className="p-3 cursor-pointer transition-all hover:shadow-lg" style={{ "--tw-shadow": "0 4px 16px rgba(0,0,0,0.4)" } as React.CSSProperties} onClick={() => onNavigateToDevice(device.id)}><div className="flex items-center justify-between mb-2"><Icon size={13} style={{ color: sc.color }} /><StatusDot status={device.status} size={5} /></div><div className="text-xs font-medium truncate" style={MONO}>{device.name}</div><div className="text-xs truncate mt-0.5" style={{ color: "var(--muted-foreground)" }}>{device.model.split(" ").slice(0, 2).join(" ")}</div>{device.cpu != null && (<><div className="mt-2"><Sparkline data={device.cpuHistory} color={sparkColor} /></div><div className="text-xs text-center" style={{ ...MONO, color: sparkColor }}>CPU {device.cpu}%</div></>)}</Card>);})}</div></div>;
+      case "tickets":
+        return <div><SLabel>Последние обращения</SLabel><div className="space-y-2">{TICKETS.slice(0, 3).map(t => <Card key={t.id} className="p-3 flex items-center gap-3 cursor-pointer transition-all hover:shadow-md" onClick={() => onNavigateToTicket(t.id)}><AlertCircle size={13} style={{ color: PRIORITY_CFG[t.priority].color, flexShrink: 0 }} /><div className="flex-1 min-w-0"><div className="text-sm truncate">{t.title}</div><div className="flex items-center gap-2 mt-1"><span className="text-xs" style={{ ...MONO, color: "var(--muted-foreground)" }}>{t.id}</span><TicketBadge status={t.status} /></div></div>{t.slaLeft > 0 && <SLATimer minutes={t.slaLeft} />}</Card>)}</div></div>;
+      case "logs":
+        return <div><SLabel>Последние работы</SLabel><div className="space-y-2">{WORK_LOG.slice(0, 3).map(log => <Card key={log.id} className="p-3 transition-all hover:shadow-md"><div className="flex items-start gap-2.5"><div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: "#00D4A8" }} /><div className="flex-1 min-w-0"><div className="text-sm truncate">{log.title}</div><div className="text-xs mt-0.5" style={{ ...MONO, color: "var(--muted-foreground)" }}>{log.date} · {log.engineer}</div></div>{log.confirmed && <Check size={11} style={{ color: "#22C55E", flexShrink: 0, marginTop: 3 }} />}</div></Card>)}</div></div>;
+      case "k8s":
+        return <div><SLabel>Kubernetes — k8s-prod-01</SLabel><div className="space-y-2">{K8S_NODES.map(n => <Card key={n.id} className="p-3 flex items-center gap-3 transition-all hover:shadow-md"><div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: n.status === "ready" ? "#22C55E" : "#EF4444" }} /><span className="text-xs flex-1" style={MONO}>{n.name}</span><span className="text-xs" style={{ ...MONO, color: "var(--muted-foreground)" }}>{n.role}</span><span className="text-xs" style={{ ...MONO, color: n.status === "ready" ? "#22C55E" : "#EF4444" }}>{n.status}</span></Card>)}</div></div>;
+      default:
+        return <Card className="p-4 h-full flex items-center justify-center"><span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{ALL_WIDGETS.find(w => w.id === id)?.label ?? id}</span></Card>;
+    }
+  };
 
   return (
     <div className="space-y-5">
       {showOnboarding && <OnboardingBanner onDismiss={() => setShowOnboarding(false)} />}
-      <div className="flex items-center justify-end gap-2">
-        {editMode && <button onClick={() => setShowLib(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs" style={{ backgroundColor: "#00D4A815", color: "#00D4A8", border: "1px solid #00D4A830" }}><Plus size={11} />Добавить виджет</button>}
-        <button onClick={() => setEditMode(e => !e)} className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs transition-colors" style={{ backgroundColor: editMode ? "#00D4A820" : "#0C1117", color: editMode ? "#00D4A8" : "#4A6070", border: `1px solid ${editMode ? "#00D4A840" : "rgba(255,255,255,0.065)"}` }}>
+
+      <div className="flex items-center gap-2">
+        {editMode && <span className="text-xs mr-auto" style={{ ...MONO, color: "var(--muted-foreground)" }}>⠿ Перетащите виджеты для изменения порядка</span>}
+        {editMode && <button onClick={() => setShowLib(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs transition-all hover:opacity-90" style={{ backgroundColor: "#00D4A815", color: "#00D4A8", border: "1px solid #00D4A830" }}><Plus size={11} />Добавить виджет</button>}
+        <button onClick={() => setEditMode(e => !e)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded text-xs transition-all" style={{ backgroundColor: editMode ? "#00D4A820" : "var(--card)", color: editMode ? "#00D4A8" : "var(--muted-foreground)", border: `1px solid ${editMode ? "#00D4A840" : "var(--border)"}` }}>
           <Edit3 size={11} />{editMode ? "Готово" : "Изменить дашборд"}
         </button>
       </div>
 
-      {/* KPI row */}
-      {(has("health") || has("incidents") || has("maintenance") || has("licenses") || has("sla_widget") || has("billing_widget")) && (
-        <div className="grid grid-cols-4 gap-3">
-          {has("health") && <WW id="health"><Card className="p-4"><SLabel>Состояние инфраструктуры</SLabel><div className="flex items-center gap-3"><div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${hColor}15` }}><Activity size={20} style={{ color: hColor }} /></div><div><div className="text-sm font-semibold" style={{ color: hColor }}>{hLabel}</div><div className="text-xs mt-0.5" style={{ ...MONO, color: "#4A6070" }}>{DEVICES.filter(d => d.status === "ok").length}/{DEVICES.length} устройств норма</div></div></div><div className="flex gap-1.5 mt-3">{DEVICES.map(d => <StatusDot key={d.id} status={d.status} size={6} />)}</div></Card></WW>}
-          {has("incidents") && <WW id="incidents"><Card className="p-4"><SLabel>Активные инциденты</SLabel><div className="flex items-end gap-2"><span className="text-4xl font-bold" style={{ color: critTickets.length > 0 ? "#EF4444" : "#22C55E" }}>{critTickets.length}</span><span className="text-muted-foreground text-sm mb-1.5">критических</span></div><div className="space-y-1 mt-1">{TICKETS.filter(t => t.status === "in_progress").slice(0, 2).map(t => <button key={t.id} onClick={() => onNavigateToTicket(t.id)} className="flex items-center gap-1.5 text-xs w-full text-left hover:opacity-80" style={{ ...MONO, color: "#4A6070" }}><span style={{ color: PRIORITY_CFG[t.priority].color }}>●</span>{t.id}</button>)}</div></Card></WW>}
-          {has("maintenance") && <WW id="maintenance"><Card className="p-4"><SLabel>Ближайшие работы</SLabel><div className="space-y-2.5">{MAINTENANCE.slice(0, 2).map((m, i) => <div key={i}><div className="text-xs text-foreground leading-snug">{m.title}</div><div className="text-xs mt-0.5" style={{ ...MONO, color: "#4A6070" }}>{m.date} · {m.time}</div></div>)}</div></Card></WW>}
-          {has("licenses") && <WW id="licenses"><Card className="p-4"><SLabel>Лицензии / подписки</SLabel><div className="space-y-2">{LICENSES.map((l, i) => <div key={i} className="flex items-center justify-between gap-2"><span className="text-xs text-foreground truncate flex-1">{l.name.split(" ").slice(0, 2).join(" ")}</span><span className="text-xs flex-shrink-0" style={{ ...MONO, color: l.daysLeft < 90 ? "#F59E0B" : "#4A6070" }}>{l.daysLeft}д</span></div>)}</div></Card></WW>}
-          {has("sla_widget") && <WW id="sla_widget"><Card className="p-4"><SLabel>SLA за июль</SLabel><div className="text-3xl font-bold" style={{ ...MONO, color: "#22C55E" }}>99.87%</div><div className="text-xs mt-1" style={{ ...MONO, color: "#4A6070" }}>Цель: 99.5%</div></Card></WW>}
-          {has("billing_widget") && <WW id="billing_widget"><Card className="p-4"><SLabel>Тариф</SLabel><div className="text-sm font-semibold text-foreground mb-1">Standard Plan</div><div className="text-xs" style={{ ...MONO, color: "#4A6070" }}>Устройства: {PLAN_DATA.devices.used}/{PLAN_DATA.devices.limit}</div><div className="mt-2"><MetricBar label="Использование" value={Math.round(PLAN_DATA.devices.used / PLAN_DATA.devices.limit * 100)} color="#00D4A8" /></div></Card></WW>}
-        </div>
-      )}
-
-      {has("devicemon") && (
-        <WW id="devicemon" full>
-          <SLabel>Мониторинг устройств</SLabel>
-          <div className="grid grid-cols-5 gap-3">
-            {DEVICES.map(device => {
-              const Icon = DEVICE_ICON[device.type] ?? Globe;
-              const sc = STATUS_CFG[device.status];
-              const sparkColor = (device.cpu ?? 0) > 70 ? "#F59E0B" : "#00D4A8";
-              return (
-                <Card key={device.id} className="p-3 hover:border-[rgba(255,255,255,0.15)] transition-colors" onClick={() => onNavigateToDevice(device.id)}>
-                  <div className="flex items-center justify-between mb-2"><Icon size={13} style={{ color: sc.color }} /><StatusDot status={device.status} size={5} /></div>
-                  <div className="text-xs font-medium truncate" style={MONO}>{device.name}</div>
-                  <div className="text-xs truncate mt-0.5" style={{ color: "#4A6070" }}>{device.model.split(" ").slice(0, 2).join(" ")}</div>
-                  {device.cpu != null && (<><div className="mt-2"><Sparkline data={device.cpuHistory} color={sparkColor} /></div><div className="text-xs text-center" style={{ ...MONO, color: sparkColor }}>CPU {device.cpu}%</div></>)}
-                </Card>
-              );
-            })}
+      {/* Unified draggable grid */}
+      <div className="grid grid-cols-4 gap-4">
+        {activeWidgets.map(id => (
+          <div
+            key={id}
+            className={`relative ${colSpan(id)}`}
+            draggable={editMode}
+            onDragStart={e => { e.dataTransfer.effectAllowed = "move"; dragIdRef.current = id; setDraggedId(id); }}
+            onDragEnd={() => { dragIdRef.current = null; setDraggedId(null); setDragOverId(null); }}
+            onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (editMode && dragIdRef.current !== id) setDragOverId(id); }}
+            onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOverId(null); }}
+            onDrop={e => { e.preventDefault(); const from = dragIdRef.current; if (from && from !== id) reorder(from, id); dragIdRef.current = null; setDraggedId(null); setDragOverId(null); }}
+            style={{ opacity: draggedId === id ? 0.35 : 1, outline: dragOverId === id ? "2px dashed #00D4A8" : "none", outlineOffset: 3, borderRadius: 4, cursor: editMode ? (draggedId === id ? "grabbing" : "grab") : "default", transition: "opacity 0.15s" }}
+          >
+            {editMode && (
+              <button
+                onClick={e => { e.stopPropagation(); setActiveWidgets(p => p.filter(w => w !== id)); }}
+                className="absolute -top-2 -right-2 z-20 w-5 h-5 rounded-full flex items-center justify-center transition-all hover:scale-110"
+                style={{ backgroundColor: "#EF4444", color: "#fff" }}
+              >
+                <X size={10} />
+              </button>
+            )}
+            {renderContent(id)}
           </div>
-        </WW>
-      )}
-
-      {(has("tickets") || has("logs") || has("k8s")) && (
-        <div className="grid grid-cols-2 gap-4">
-          {has("tickets") && <WW id="tickets"><SLabel>Последние обращения</SLabel><div className="space-y-2">{TICKETS.slice(0, 3).map(t => <Card key={t.id} className="p-3 flex items-center gap-3 hover:border-[rgba(255,255,255,0.12)] transition-colors" onClick={() => onNavigateToTicket(t.id)}><AlertCircle size={13} style={{ color: PRIORITY_CFG[t.priority].color, flexShrink: 0 }} /><div className="flex-1 min-w-0"><div className="text-sm truncate">{t.title}</div><div className="flex items-center gap-2 mt-1"><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{t.id}</span><TicketBadge status={t.status} /></div></div>{t.slaLeft > 0 && <SLATimer minutes={t.slaLeft} />}</Card>)}</div></WW>}
-          {has("logs") && <WW id="logs"><SLabel>Последние работы</SLabel><div className="space-y-2">{WORK_LOG.slice(0, 3).map(log => <Card key={log.id} className="p-3 hover:border-[rgba(255,255,255,0.12)] transition-colors"><div className="flex items-start gap-2.5"><div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: "#00D4A8" }} /><div className="flex-1 min-w-0"><div className="text-sm truncate">{log.title}</div><div className="text-xs mt-0.5" style={{ ...MONO, color: "#4A6070" }}>{log.date} · {log.engineer}</div></div>{log.confirmed && <Check size={11} style={{ color: "#22C55E", flexShrink: 0, marginTop: 3 }} />}</div></Card>)}</div></WW>}
-          {has("k8s") && <WW id="k8s"><SLabel>Kubernetes — k8s-prod-01</SLabel><div className="space-y-2">{K8S_NODES.map(n => <Card key={n.id} className="p-3 flex items-center gap-3"><div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: n.status === "ready" ? "#22C55E" : "#EF4444" }} /><span className="text-xs flex-1" style={MONO}>{n.name}</span><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{n.role}</span><span className="text-xs" style={{ ...MONO, color: n.status === "ready" ? "#22C55E" : "#EF4444" }}>{n.status}</span></Card>)}</div></WW>}
-        </div>
-      )}
+        ))}
+      </div>
 
       {showLib && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.75)" }}>
-          <div className="w-full max-w-lg rounded p-6" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
-            <div className="flex items-center justify-between mb-5"><h3 className="text-sm font-semibold">Библиотека виджетов</h3><button onClick={() => setShowLib(false)} style={{ color: "#4A6070" }}><X size={14} /></button></div>
-            {available.length === 0 ? <div className="text-center py-8 text-sm" style={{ color: "#4A6070" }}>Все виджеты уже добавлены</div> : (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.75)" }} onClick={() => setShowLib(false)}>
+          <div className="w-full max-w-lg rounded p-6" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-semibold">Библиотека виджетов</h3>
+              <button onClick={() => setShowLib(false)} className="transition-colors hover:opacity-70" style={{ color: "var(--muted-foreground)" }}><X size={14} /></button>
+            </div>
+            {available.length === 0 ? (
+              <div className="text-center py-8 text-sm" style={{ color: "var(--muted-foreground)" }}>Все виджеты уже добавлены</div>
+            ) : (
               <div className="grid grid-cols-2 gap-2">
-                {available.map(w => <button key={w.id} onClick={() => { setActiveWidgets(p => [...p, w.id]); setShowLib(false); }} className="p-3 rounded text-left transition-colors hover:border-[rgba(0,212,168,0.3)]" style={{ border: "1px solid rgba(255,255,255,0.065)", backgroundColor: "#111C24" }}><div className="text-xs font-medium text-foreground mb-1">{w.label}</div><div className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{w.size === "full" ? "Полная ширина" : w.size === "half" ? "Половина" : "Четверть"}</div></button>)}
+                {available.map(w => (
+                  <button
+                    key={w.id}
+                    onClick={() => { setActiveWidgets(p => [...p, w.id]); setShowLib(false); }}
+                    className="p-3 rounded text-left transition-all"
+                    style={{ border: "1px solid var(--border)", backgroundColor: "var(--muted)" }}
+                  >
+                    <div className="text-xs font-medium text-foreground mb-1">{w.label}</div>
+                    <div className="text-xs" style={{ ...MONO, color: "var(--muted-foreground)" }}>{w.size === "full" ? "Полная ширина" : w.size === "half" ? "Половина" : "Четверть"}</div>
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -456,15 +500,38 @@ function Dashboard({ onNavigateToTicket, onNavigateToDevice }: { onNavigateToTic
 
 // ─── Full Chat ────────────────────────────────────────────────────────────────
 
+type ChatMsg = { id: number; from: string; author: string; avatar: string; time: string; text: string; wikiCard?: { id: number; title: string; category: string; snippet: string } };
+
 function FullChat({ ticketId, onBack }: { ticketId: string; onBack: () => void }) {
   const ticket = TICKETS.find(t => t.id === ticketId);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [sideTab, setSideTab] = useState<"attachments"|"links"|"participants">("attachments");
   const [showSide, setShowSide] = useState(true);
+  const [showWiki, setShowWiki] = useState(false);
+  const [wikiSearch, setWikiSearch] = useState("");
+  const [pendingWiki, setPendingWiki] = useState<typeof WIKI_ENTRIES[0] | null>(null);
+  const [localMsgs, setLocalMsgs] = useState<ChatMsg[]>(
+    CHAT_MESSAGES.map(m => ({ id: m.id, from: m.from, author: m.author, avatar: m.avatar, time: m.time, text: m.text }))
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, []);
-  const handleSend = () => { if (!input.trim()) return; setInput(""); setTyping(true); setTimeout(() => setTyping(false), 2200); };
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [localMsgs]);
+
+  const filteredWiki = WIKI_ENTRIES.filter(w =>
+    !wikiSearch || w.title.toLowerCase().includes(wikiSearch.toLowerCase()) || w.category.toLowerCase().includes(wikiSearch.toLowerCase())
+  );
+
+  const handleSend = () => {
+    if (!input.trim() && !pendingWiki) return;
+    const newMsg: ChatMsg = {
+      id: localMsgs.length + 1, from: "engineer", author: "Иванов И.А.", avatar: "ИИ",
+      time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
+      text: input, wikiCard: pendingWiki ? { id: pendingWiki.id, title: pendingWiki.title, category: pendingWiki.category, snippet: pendingWiki.snippet } : undefined,
+    };
+    setLocalMsgs(m => [...m, newMsg]);
+    setInput(""); setPendingWiki(null);
+    setTyping(true); setTimeout(() => setTyping(false), 2200);
+  };
   const ac = (from: string) => from === "engineer" ? { bg: "#00D4A818", color: "#00D4A8" } : from === "system" ? { bg: "#38BDF820", color: "#38BDF8" } : { bg: "#8B5CF620", color: "#8B5CF6" };
 
   const attachments = [
@@ -492,31 +559,89 @@ function FullChat({ ticketId, onBack }: { ticketId: string; onBack: () => void }
           <button onClick={() => setShowSide(s => !s)} className="ml-2 p-1.5 rounded hover:bg-muted" style={{ color: showSide ? "#00D4A8" : "#4A6070" }}><Layers size={13} /></button>
         </div>
         <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
-          {CHAT_MESSAGES.map(msg => {
+          {localMsgs.map(msg => {
             const a = ac(msg.from);
             if (msg.from === "system") return <div key={msg.id} className="flex justify-center"><div className="flex items-center gap-2 px-3 py-1.5 rounded text-xs" style={{ ...MONO, backgroundColor: "#38BDF810", color: "#38BDF8", border: "1px solid #38BDF820" }}><Paperclip size={10} />{msg.text}</div></div>;
             const isClient = msg.from === "client";
             return (
               <div key={msg.id} className={`flex gap-3 ${isClient ? "flex-row-reverse" : ""}`}>
                 <div className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: a.bg, color: a.color }}>{msg.avatar}</div>
-                <div className={`max-w-xl flex flex-col gap-1 ${isClient ? "items-end" : "items-start"}`}>
+                <div className={`max-w-xl flex flex-col gap-1.5 ${isClient ? "items-end" : "items-start"}`}>
                   <div className="flex items-center gap-2" style={{ flexDirection: isClient ? "row-reverse" : "row" }}><span className="text-xs font-medium text-foreground">{msg.author}</span><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{msg.time}</span></div>
-                  <div className="px-4 py-2.5 rounded text-sm leading-relaxed" style={{ backgroundColor: isClient ? "#00D4A812" : "#111C24", border: `1px solid ${isClient ? "#00D4A830" : "rgba(255,255,255,0.065)"}`, color: "#C4D2DC" }}>{msg.text}</div>
+                  {msg.text && <div className="px-4 py-2.5 rounded text-sm leading-relaxed" style={{ backgroundColor: isClient ? "#00D4A812" : "var(--muted)", border: `1px solid ${isClient ? "#00D4A830" : "var(--border)"}`, color: "var(--foreground)" }}>{msg.text}</div>}
+                  {msg.wikiCard && (
+                    <div className="rounded overflow-hidden max-w-sm" style={{ border: "1px solid rgba(59,130,246,0.4)", backgroundColor: "#1A2233" }}>
+                      <div className="px-3 py-1.5 flex items-center gap-2" style={{ backgroundColor: "#3B82F615", borderBottom: "1px solid rgba(59,130,246,0.3)" }}>
+                        <BookOpen size={10} style={{ color: "#3B82F6" }} />
+                        <span className="text-xs font-semibold" style={{ ...MONO, color: "#3B82F6" }}>Wiki</span>
+                        <span className="text-xs" style={{ color: "#4A6070" }}>·</span>
+                        <span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>{msg.wikiCard.category}</span>
+                      </div>
+                      <div className="px-3 py-2.5">
+                        <div className="text-xs font-semibold text-foreground mb-1.5">{msg.wikiCard.title}</div>
+                        <div className="text-xs rounded px-2 py-1.5 overflow-hidden" style={{ backgroundColor: "#06090C", color: "#00D4A8", fontFamily: "'JetBrains Mono',monospace", maxHeight: 48, textOverflow: "ellipsis" }}>
+                          {msg.wikiCard.snippet.slice(0, 80)}…
+                        </div>
+                        <button className="mt-2 text-xs transition-opacity hover:opacity-70" style={{ color: "#3B82F6" }}>Открыть страницу →</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
-          {typing && <div className="flex gap-3"><div className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: "#00D4A818", color: "#00D4A8" }}>ИИ</div><div className="px-4 py-3 rounded flex items-center gap-1.5" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)" }}>{[0,1,2].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#00D4A8", display: "inline-block", animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }} />)}</div></div>}
+          {typing && <div className="flex gap-3"><div className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center text-xs font-bold" style={{ ...MONO, backgroundColor: "#00D4A818", color: "#00D4A8" }}>ИИ</div><div className="px-4 py-3 rounded flex items-center gap-1.5" style={{ backgroundColor: "var(--muted)", border: "1px solid var(--border)" }}>{[0,1,2].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#00D4A8", display: "inline-block", animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }} />)}</div></div>}
           <div ref={bottomRef} />
         </div>
         <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.065)" }}>
-          <div className="flex gap-2 items-end">
-            <div className="flex-1 rounded overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.065)", backgroundColor: "#0C1117" }}>
-              <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }} rows={3} placeholder="Введите сообщение... (Enter — отправить)" className="w-full px-4 py-3 text-sm outline-none resize-none" style={{ backgroundColor: "transparent", color: "#C4D2DC", fontFamily: "inherit" }} />
-              <div className="flex items-center gap-2 px-3 pb-2"><button className="text-muted-foreground hover:text-foreground p-1"><Paperclip size={13} /></button><span className="text-xs" style={{ ...MONO, color: "#4A6070" }}>Прикрепить файл</span></div>
+          {/* Pending wiki card preview */}
+          {pendingWiki && (
+            <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded" style={{ backgroundColor: "#3B82F615", border: "1px solid rgba(59,130,246,0.3)" }}>
+              <BookOpen size={11} style={{ color: "#3B82F6" }} />
+              <span className="text-xs flex-1 text-foreground truncate">{pendingWiki.title}</span>
+              <button onClick={() => setPendingWiki(null)} className="transition-opacity hover:opacity-70" style={{ color: "#4A6070" }}><X size={11} /></button>
             </div>
-            <button onClick={handleSend} disabled={!input.trim()} className="px-4 py-3 rounded flex items-center gap-2 text-sm font-medium flex-shrink-0" style={{ backgroundColor: input.trim() ? "#00D4A8" : "#00D4A820", color: input.trim() ? "#000" : "#4A6070" }}><Send size={13} />Отправить</button>
+          )}
+          <div className="flex gap-2 items-end">
+            <div className="flex-1 rounded overflow-hidden" style={{ border: "1px solid var(--border)", backgroundColor: "var(--card)" }}>
+              <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }} rows={3} placeholder="Введите сообщение... (Enter — отправить)" className="w-full px-4 py-3 text-sm outline-none resize-none" style={{ backgroundColor: "transparent", color: "var(--foreground)", fontFamily: "inherit" }} />
+              <div className="flex items-center gap-1 px-3 pb-2">
+                <button className="p-1.5 rounded transition-all hover:bg-muted" style={{ color: "var(--muted-foreground)" }}><Paperclip size={13} /></button>
+                <button onClick={() => setShowWiki(w => !w)} className="p-1.5 rounded transition-all hover:bg-muted flex items-center gap-1 text-xs" style={{ color: showWiki ? "#3B82F6" : "var(--muted-foreground)" }}>
+                  <BookOpen size={13} />
+                  <span style={MONO}>Wiki</span>
+                </button>
+                <span className="text-xs ml-1" style={{ ...MONO, color: "var(--muted-foreground)" }}>Прикрепить файл</span>
+              </div>
+            </div>
+            <button onClick={handleSend} disabled={!input.trim() && !pendingWiki} className="px-4 py-3 rounded flex items-center gap-2 text-sm font-medium flex-shrink-0 transition-all hover:opacity-90" style={{ backgroundColor: (input.trim() || pendingWiki) ? "#00D4A8" : "#00D4A820", color: (input.trim() || pendingWiki) ? "#000" : "#4A6070" }}><Send size={13} />Отправить</button>
           </div>
+          {/* Wiki search panel */}
+          {showWiki && (
+            <div className="mt-2 rounded overflow-hidden" style={{ border: "1px solid rgba(59,130,246,0.35)", backgroundColor: "var(--card)" }}>
+              <div className="p-2 flex items-center gap-2" style={{ borderBottom: "1px solid var(--border)" }}>
+                <Search size={11} style={{ color: "var(--muted-foreground)" }} />
+                <input value={wikiSearch} onChange={e => setWikiSearch(e.target.value)} placeholder="Поиск по Wiki..." autoFocus className="flex-1 text-xs outline-none bg-transparent" style={{ color: "var(--foreground)" }} />
+                <button onClick={() => setShowWiki(false)} className="transition-opacity hover:opacity-70" style={{ color: "var(--muted-foreground)" }}><X size={11} /></button>
+              </div>
+              <div className="max-h-44 overflow-auto">
+                {filteredWiki.map(w => (
+                  <button
+                    key={w.id}
+                    className="w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted border-b last:border-0 border-border"
+                    onClick={() => { setPendingWiki(w); setShowWiki(false); setWikiSearch(""); }}
+                  >
+                    <BookOpen size={11} style={{ color: "#3B82F6", flexShrink: 0, marginTop: 2 }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-foreground truncate">{w.title}</div>
+                      <div className="text-xs mt-0.5" style={{ ...MONO, color: "var(--muted-foreground)" }}>{w.category} · {w.views} просм.</div>
+                    </div>
+                  </button>
+                ))}
+                {filteredWiki.length === 0 && <div className="px-3 py-4 text-xs text-center" style={{ color: "var(--muted-foreground)" }}>Ничего не найдено</div>}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -569,6 +694,18 @@ function ServiceDesk({ onOpenChat, initialTicket }: { onOpenChat: (id: string) =
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selPri, setSelPri] = useState("medium");
+  const [attachedDevices, setAttachedDevices] = useState<string[]>([]);
+  const [devSearch, setDevSearch] = useState("");
+  const [showDevDD, setShowDevDD] = useState(false);
+  const allDeviceOptions = [
+    ...DEVICES.map(d => ({ id: d.id, label: d.name, sub: d.model, type: d.type })),
+    { id: "cable-main-01", label: "cable-main-01", sub: "Кабельная линия / ГРЩ → Rack-A", type: "cable" },
+    { id: "cable-wan-01", label: "cable-wan-01", sub: "WAN-кабель / Ростелеком", type: "cable" },
+  ];
+  const filteredDevOpts = allDeviceOptions.filter(d =>
+    !attachedDevices.includes(d.id) &&
+    (d.label.toLowerCase().includes(devSearch.toLowerCase()) || d.sub.toLowerCase().includes(devSearch.toLowerCase()))
+  );
   const sel = selected ? TICKETS.find(t => t.id === selected) : null;
   const filtered = TICKETS.filter(t => (filter === "all" || t.status === filter) && (!search || t.title.toLowerCase().includes(search.toLowerCase()) || t.id.includes(search)));
 
@@ -616,16 +753,87 @@ function ServiceDesk({ onOpenChat, initialTicket }: { onOpenChat: (id: string) =
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.75)" }}>
-          <div className="w-full max-w-lg rounded p-6" style={{ backgroundColor: "#0C1117", border: "1px solid rgba(255,255,255,0.065)" }}>
-            <div className="flex items-center justify-between mb-5"><h3 className="text-base font-semibold">Новая заявка</h3><button onClick={() => setShowForm(false)} style={{ color: "#4A6070" }}><X size={15} /></button></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.75)" }} onClick={() => setShowForm(false)}>
+          <div className="w-full max-w-lg rounded p-6 max-h-[90vh] overflow-auto" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold">Новая заявка</h3>
+              <button onClick={() => setShowForm(false)} className="transition-opacity hover:opacity-70" style={{ color: "var(--muted-foreground)" }}><X size={15} /></button>
+            </div>
             <div className="space-y-4">
-              <div><div className="text-xs mb-1.5" style={{ ...MONO, color: "#4A6070" }}>Категория</div><select className="w-full rounded text-sm py-2 px-3 outline-none" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }}><option>Инфраструктура</option><option>Сеть</option><option>ПО</option><option>Запрос на изменение</option></select></div>
-              <div><div className="text-xs mb-1.5" style={{ ...MONO, color: "#4A6070" }}>Тема</div><input className="w-full rounded text-sm py-2 px-3 outline-none" placeholder="Кратко опишите проблему" style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC" }} /></div>
-              <div><div className="text-xs mb-1.5" style={{ ...MONO, color: "#4A6070" }}>Описание</div><textarea rows={4} className="w-full rounded text-sm py-2 px-3 outline-none resize-none" placeholder="Подробно опишите ситуацию..." style={{ backgroundColor: "#111C24", border: "1px solid rgba(255,255,255,0.065)", color: "#C4D2DC", fontFamily: "inherit" }} /></div>
-              <div><div className="text-xs mb-1.5" style={{ ...MONO, color: "#4A6070" }}>Приоритет</div><div className="flex gap-2">{(["low","medium","high","critical"] as const).map(p => <button key={p} onClick={() => setSelPri(p)} className="flex-1 py-1.5 rounded text-xs transition-all" style={{ borderWidth: 1, borderStyle: "solid", borderColor: selPri === p ? PRIORITY_CFG[p].color : `${PRIORITY_CFG[p].color}30`, color: PRIORITY_CFG[p].color, backgroundColor: selPri === p ? `${PRIORITY_CFG[p].color}18` : `${PRIORITY_CFG[p].color}08`, ...MONO }}>{PRIORITY_CFG[p].label}</button>)}</div></div>
-              <div className="rounded p-4 flex items-center justify-center gap-2 text-sm" style={{ border: "1px dashed rgba(255,255,255,0.1)", color: "#4A6070" }}><Paperclip size={13} />Перетащите файлы или кликните для загрузки</div>
-              <div className="flex gap-3 pt-1"><button onClick={() => setShowForm(false)} className="flex-1 py-2 rounded text-sm" style={{ border: "1px solid rgba(255,255,255,0.065)", color: "#4A6070" }}>Отмена</button><button className="flex-1 py-2 rounded text-sm font-medium" style={{ backgroundColor: "#00D4A8", color: "#000" }}>Создать заявку</button></div>
+              <div>
+                <div className="text-xs mb-1.5" style={{ ...MONO, color: "var(--muted-foreground)" }}>Категория</div>
+                <select className="w-full rounded text-sm py-2 px-3 outline-none transition-colors" style={{ backgroundColor: "var(--muted)", border: "1px solid var(--border)", color: "var(--foreground)" }}>
+                  <option>Инфраструктура</option><option>Сеть</option><option>ПО</option><option>Запрос на изменение</option>
+                </select>
+              </div>
+              <div>
+                <div className="text-xs mb-1.5" style={{ ...MONO, color: "var(--muted-foreground)" }}>Тема</div>
+                <input className="w-full rounded text-sm py-2 px-3 outline-none transition-colors" placeholder="Кратко опишите проблему" style={{ backgroundColor: "var(--muted)", border: "1px solid var(--border)", color: "var(--foreground)" }} />
+              </div>
+              <div>
+                <div className="text-xs mb-1.5" style={{ ...MONO, color: "var(--muted-foreground)" }}>Описание</div>
+                <textarea rows={3} className="w-full rounded text-sm py-2 px-3 outline-none resize-none transition-colors" placeholder="Подробно опишите ситуацию..." style={{ backgroundColor: "var(--muted)", border: "1px solid var(--border)", color: "var(--foreground)", fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <div className="text-xs mb-1.5" style={{ ...MONO, color: "var(--muted-foreground)" }}>Приоритет</div>
+                <div className="flex gap-2">
+                  {(["low","medium","high","critical"] as const).map(p => (
+                    <button key={p} onClick={() => setSelPri(p)} className="flex-1 py-1.5 rounded text-xs transition-all" style={{ borderWidth: 1, borderStyle: "solid", borderColor: selPri === p ? PRIORITY_CFG[p].color : `${PRIORITY_CFG[p].color}30`, color: PRIORITY_CFG[p].color, backgroundColor: selPri === p ? `${PRIORITY_CFG[p].color}18` : `${PRIORITY_CFG[p].color}08`, ...MONO }}>
+                      {PRIORITY_CFG[p].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Device attachment */}
+              <div>
+                <div className="text-xs mb-1.5" style={{ ...MONO, color: "var(--muted-foreground)" }}>Привязать устройство / кабельную линию</div>
+                <div className="relative">
+                  <div className="flex items-center gap-2 flex-wrap p-2 rounded min-h-[40px] cursor-text transition-colors" style={{ backgroundColor: "var(--muted)", border: `1px solid ${showDevDD ? "#00D4A8" : "var(--border)"}` }} onClick={() => setShowDevDD(true)}>
+                    {attachedDevices.map(devId => {
+                      const d = allDeviceOptions.find(x => x.id === devId);
+                      return d ? (
+                        <span key={devId} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs flex-shrink-0" style={{ ...MONO, backgroundColor: "#00D4A815", color: "#00D4A8", border: "1px solid #00D4A830" }}>
+                          {d.label}
+                          <button onClick={e => { e.stopPropagation(); setAttachedDevices(p => p.filter(x => x !== devId)); }} className="ml-1 transition-opacity hover:opacity-70"><X size={8} /></button>
+                        </span>
+                      ) : null;
+                    })}
+                    <input
+                      value={devSearch}
+                      onChange={e => { setDevSearch(e.target.value); setShowDevDD(true); }}
+                      onFocus={() => setShowDevDD(true)}
+                      placeholder={attachedDevices.length === 0 ? "Поиск устройства..." : ""}
+                      className="flex-1 min-w-24 text-xs outline-none bg-transparent"
+                      style={{ color: "var(--foreground)" }}
+                    />
+                  </div>
+                  {showDevDD && filteredDevOpts.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 rounded z-30 max-h-40 overflow-auto" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                      {filteredDevOpts.map(d => (
+                        <button
+                          key={d.id}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-left text-xs transition-colors hover:bg-muted"
+                          onClick={() => { setAttachedDevices(p => [...p, d.id]); setDevSearch(""); setShowDevDD(false); }}
+                        >
+                          <HardDrive size={11} style={{ color: "var(--muted-foreground)", flexShrink: 0 }} />
+                          <div className="flex-1 min-w-0"><div className="text-foreground truncate" style={MONO}>{d.label}</div><div className="truncate" style={{ color: "var(--muted-foreground)" }}>{d.sub}</div></div>
+                          <span className="px-1.5 py-0.5 rounded flex-shrink-0" style={{ ...MONO, backgroundColor: "var(--muted)", color: "var(--muted-foreground)", fontSize: 9 }}>{d.type}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {showDevDD && <div className="fixed inset-0 z-20" onClick={() => setShowDevDD(false)} />}
+              </div>
+
+              <div className="rounded p-4 flex items-center justify-center gap-2 text-sm transition-colors hover:opacity-80 cursor-pointer" style={{ border: "1px dashed var(--border)", color: "var(--muted-foreground)" }}>
+                <Paperclip size={13} />Перетащите файлы или кликните для загрузки
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => { setShowForm(false); setAttachedDevices([]); setDevSearch(""); }} className="flex-1 py-2 rounded text-sm transition-all hover:opacity-80" style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}>Отмена</button>
+                <button className="flex-1 py-2 rounded text-sm font-medium transition-all hover:opacity-90" style={{ backgroundColor: "#00D4A8", color: "#000" }}>Создать заявку</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2183,6 +2391,24 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden" style={{ fontFamily:"'Inter', -apple-system, sans-serif" }}>
+    <style>{`
+      button { transition: opacity 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s; }
+      button:hover { opacity: 0.9; }
+      button:active { opacity: 0.75; transform: scale(0.98); }
+      a:hover { opacity: 0.8; }
+      .bg-card:hover, [class*="hover:border"] { transition: border-color 0.2s, box-shadow 0.2s; }
+      select, input, textarea { transition: border-color 0.2s, box-shadow 0.2s; }
+      select:focus, input:focus, textarea:focus { box-shadow: 0 0 0 2px rgba(0,212,168,0.25); }
+      [data-theme="light"] select:focus, [data-theme="light"] input:focus, [data-theme="light"] textarea:focus { box-shadow: 0 0 0 2px rgba(0,158,128,0.2); }
+      tr:hover td { background-color: rgba(0,212,168,0.04) !important; }
+      [data-theme="light"] tr:hover td { background-color: rgba(0,158,128,0.06) !important; }
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+      [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); }
+      [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+    `}</style>
       <Sidebar view={view} setView={handleSetView} role={role} currentClientId={currentClientId} onSwitchAccount={()=>setView("switchaccount")}/>
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Impersonation banner */}
